@@ -1,0 +1,28 @@
+:root { --ink: #17211d; --muted: #627069; --line: #dce3dd; --paper: #fffefa; --accent: #176b4a; --wash: #eff6f1; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: var(--paper); font-family: Arial, Helvetica, sans-serif; }
+main { max-width: 920px; margin: 0 auto; padding: 80px 24px; }
+.hero { max-width: 720px; }
+.eyebrow { margin: 0 0 14px; color: var(--accent); font-size: .78rem; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(3rem, 9vw, 5.5rem); font-weight: 500; letter-spacing: -.06em; }
+.intro { color: var(--muted); font-family: Georgia, serif; font-size: 1.25rem; line-height: 1.55; }
+.search-form { margin-top: 34px; }
+textarea, input, select { width: 100%; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: #fff; font: inherit; }
+textarea { display: block; min-height: 98px; padding: 16px; line-height: 1.45; resize: vertical; }
+textarea:focus, input:focus, select:focus { outline: 2px solid #91c5aa; outline-offset: 2px; }
+button { margin-top: 12px; padding: 12px 18px; border: 0; border-radius: 5px; color: #fff; background: var(--accent); cursor: pointer; font: inherit; font-weight: 700; }
+button:disabled { cursor: wait; opacity: .68; }
+.message, .empty { color: var(--muted); line-height: 1.5; }
+.error { color: #a12d29; }
+.results { margin-top: 64px; }
+.filters { display: grid; grid-template-columns: 190px 1fr; gap: 16px; padding: 20px; border: 1px solid var(--line); background: var(--wash); }
+.filters label { color: var(--muted); font-size: .82rem; font-weight: 700; }
+.filters input, .filters select { margin-top: 7px; padding: 9px 10px; font-size: .95rem; font-weight: 400; }
+.paper-list { margin-top: 18px; }
+.paper-card { display: grid; grid-template-columns: 58px 1fr; gap: 20px; padding: 28px 0; border-bottom: 1px solid var(--line); }
+.score { padding-top: 3px; color: var(--accent); font-size: 1.4rem; font-weight: 700; }.score span { font-size: .72rem; font-weight: 400; }
+h2 { margin: 0; font-family: Georgia, serif; font-size: 1.4rem; font-weight: 500; line-height: 1.25; }
+.metadata, .fields { color: var(--muted); font-size: .9rem; line-height: 1.5; }.explanation { margin: 16px 0 12px; line-height: 1.55; }.fields { margin: 0 0 14px; }
+a { color: var(--accent); font-size: .92rem; font-weight: 700; text-underline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 600px) { main { padding: 52px 18px; }.filters { grid-template-columns: 1fr; }.paper-card { grid-template-columns: 46px 1fr; gap: 12px; } }
