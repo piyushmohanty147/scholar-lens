@@ -22,7 +22,7 @@ const PAPER_FIELDS = "title,abstract,year,authors,url,fieldsOfStudy";
 
 function searchTerms(question: string) {
   const stopWords = new Set(["a", "an", "and", "are", "do", "does", "for", "how", "in", "is", "of", "on", "the", "to", "what", "when", "with"]);
-  const terms = question.toLowerCase().match(/[a-z0-9][a-z0-9-]*/g) ?? [];
+  const terms: string[] = question.toLowerCase().match(/[a-z0-9][a-z0-9-]*/g) ?? [];
   return terms.filter((term) => term.length > 2 && !stopWords.has(term)).slice(0, 12).join(" ");
 }
 
