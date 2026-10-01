@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
- 
+
 export const runtime = "nodejs";
- 
+
 type SemanticPaper = {
   paperId?: string;
   title?: string;
@@ -11,7 +11,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
 };
- 
+
 type OpenAlexWork = {
   id?: string;
   title?: string | null;
@@ -22,21 +22,21 @@ type OpenAlexWork = {
   primary_location?: { landing_page_url?: string | null } | null;
   topics?: { field?: { display_name?: string } }[];
 };
- 
+
 type RankedPaper = {
   id: string;
   score: number;
   explanation: string;
 };
- 
+
 const PAPER_FIELDS = "title,abstract,year,authors,url,fieldsOfStudy";
- 
+
 function searchTerms(question: string) {
   const stopWords = new Set(["a", "an", "and", "are", "do", "does", "for", "how", "in", "is", "of", "on", "the", "to", "what", "when", "with"]);
   const terms: string[] = question.toLowerCase().match(/[a-z0-9][a-z0-9-]*/g) ?? [];
   return terms.filter((term) => term.length > 2 && !stopWords.has(term)).slice(0, 12).join(" ");
 }
- 
+
 // Fetch with a few retries when the server says "too many requests" (429).
 async function fetchWithRetry(url: URL, init: RequestInit): Promise<Response> {
   let response = await fetch(url, init);
@@ -47,24 +47,24 @@ async function fetchWithRetry(url: URL, init: RequestInit): Promise<Response> {
   }
   return response;
 }
- 
+
 async function semanticScholarSearch(query: string): Promise<SemanticPaper[]> {
   const url = new URL("https://api.semanticscholar.org/graph/v1/paper/search");
   url.searchParams.set("query", query);
   url.searchParams.set("limit", "20");
   url.searchParams.set("fields", PAPER_FIELDS);
- 
+
   const headers: Record<string, string> = { Accept: "application/json" };
   if (process.env.SEMANTIC_SCHOLAR_API_KEY) headers["x-api-key"] = process.env.SEMANTIC_SCHOLAR_API_KEY;
- 
+
   const response = await fetchWithRetry(url, { headers, cache: "no-store" });
   if (response.status === 429) throw new Error("Semantic Scholar is rate limiting requests.");
   if (!response.ok) throw new Error("Semantic Scholar could not retrieve papers right now.");
- 
+
   const data = (await response.json()) as { data?: SemanticPaper[] };
   return Array.isArray(data.data) ? data.data.filter((paper) => paper.paperId && paper.title) : [];
 }
- 
+
 // OpenAlex stores abstracts as {word: [positions]}; rebuild them into normal text.
 function rebuildAbstract(index?: Record<string, number[]> | null): string | null {
   if (!index) return null;
@@ -75,22 +75,22 @@ function rebuildAbstract(index?: Record<string, number[]> | null): string | null
   const text = words.filter(Boolean).join(" ").trim();
   return text ? text.slice(0, 1500) : null;
 }
- 
+
 async function openAlexSearch(query: string): Promise<SemanticPaper[]> {
   const apiKey = process.env.OPENALEX_API_KEY;
   if (!apiKey) throw new Error("OpenAlex key is not set.");
- 
+
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
   url.searchParams.set("filter", "has_abstract:true");
   url.searchParams.set("per_page", "20");
   url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
   url.searchParams.set("api_key", apiKey);
- 
+
   const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
   if (response.status === 429) throw new Error("OpenAlex is rate limiting requests.");
   if (!response.ok) throw new Error("OpenAlex could not retrieve papers right now.");
- 
+
   const data = (await response.json()) as { results?: OpenAlexWork[] };
   const works = Array.isArray(data.results) ? data.results : [];
   return works
@@ -110,12 +110,12 @@ async function openAlexSearch(query: string): Promise<SemanticPaper[]> {
       };
     });
 }
- 
+
 // Try OpenAlex first (if a key is set), then Semantic Scholar as a backup.
 async function findCandidates(query: string): Promise<SemanticPaper[]> {
   const errors: string[] = [];
   let anySourceWorked = false;
- 
+
   if (process.env.OPENALEX_API_KEY) {
     try {
       const results = await openAlexSearch(query);
@@ -125,7 +125,7 @@ async function findCandidates(query: string): Promise<SemanticPaper[]> {
       errors.push(error instanceof Error ? error.message : "OpenAlex failed.");
     }
   }
- 
+
   try {
     const results = await semanticScholarSearch(query);
     anySourceWorked = true;
@@ -133,11 +133,11 @@ async function findCandidates(query: string): Promise<SemanticPaper[]> {
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "Semantic Scholar failed.");
   }
- 
+
   if (anySourceWorked) return [];
   throw new Error(`Could not retrieve papers right now. ${errors.join(" ")} Please try again in a moment.`);
 }
- 
+
 function extractJson(text: string) {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const start = trimmed.indexOf("[");
@@ -145,11 +145,11 @@ function extractJson(text: string) {
   if (start === -1 || end === -1) throw new Error("Gemini returned an invalid relevance response.");
   return JSON.parse(trimmed.slice(start, end + 1)) as unknown;
 }
- 
+
 async function rankPapers(question: string, candidates: SemanticPaper[]): Promise<RankedPaper[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("The server is missing GEMINI_API_KEY. Add it and try again.");
- 
+
   const candidateText = candidates.map((paper, index) => ({
     id: paper.paperId,
     index: index + 1,
@@ -157,7 +157,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
     abstract: paper.abstract ?? "No abstract available.",
   }));
   const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-3.5-flash"}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
@@ -166,12 +166,21 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
     }),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Gemini could not evaluate paper relevance right now.");
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const errorBody = (await response.json()) as { error?: { message?: string } };
+      detail = errorBody.error?.message ?? "";
+    } catch {
+      // ignore
+    }
+    throw new Error(`Gemini could not evaluate paper relevance (status ${response.status}). ${detail}`.trim());
+  }
   const payload = (await response.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
   const parsed = extractJson(text);
   if (!Array.isArray(parsed)) throw new Error("Gemini returned an invalid relevance response.");
- 
+
   const validIds = new Set(candidates.map((paper) => paper.paperId));
   return parsed.flatMap((item): RankedPaper[] => {
     if (!item || typeof item !== "object") return [];
@@ -182,14 +191,14 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
     return [{ id, score, explanation: score >= 6 && typeof record.explanation === "string" ? record.explanation.trim() : "" }];
   });
 }
- 
+
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { question?: unknown };
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question) return NextResponse.json({ error: "A research question is required." }, { status: 400 });
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
- 
+
     const candidates = await findCandidates(searchTerms(question) || question);
     if (!candidates.length) return NextResponse.json({ papers: [] });
     const rankings = await rankPapers(question, candidates);
