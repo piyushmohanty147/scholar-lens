@@ -155,7 +155,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
     id: paper.paperId,
     index: index + 1,
     title: paper.title,
-    abstract: paper.abstract ?? "No abstract available.",
+    abstract: (paper.abstract ?? "No abstract available.").slice(0, 600),
   }));
   const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
   const requestBody = JSON.stringify({
@@ -167,14 +167,24 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
   let response: Response | null = null;
   let lastStatus = 0;
   let lastDetail = "";
+  const deadline = Date.now() + 40_000;
   outer: for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const attemptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: requestBody,
-        cache: "no-store",
-      });
+      if (Date.now() > deadline) break outer;
+      let attemptResponse: Response;
+      try {
+        attemptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: requestBody,
+          cache: "no-store",
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch {
+        lastStatus = 504;
+        lastDetail = "Gemini took too long to answer.";
+        break; // try the next model
+      }
       if (attemptResponse.ok) {
         response = attemptResponse;
         break outer;
@@ -188,7 +198,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
       }
       // Only retry when the problem is temporary (busy or rate limited). Otherwise move on to the next model.
       if (lastStatus !== 503 && lastStatus !== 429) break;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
   if (!response) {
@@ -217,7 +227,7 @@ export async function POST(request: Request) {
     if (!question) return NextResponse.json({ error: "A research question is required." }, { status: 400 });
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
 
-    const candidates = await findCandidates(searchTerms(question) || question);
+    const candidates = (await findCandidates(searchTerms(question) || question)).slice(0, 12);
     if (!candidates.length) return NextResponse.json({ papers: [] });
     const rankings = await rankPapers(question, candidates);
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
