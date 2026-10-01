@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type SemanticPaper = {
   paperId?: string;
@@ -157,24 +158,41 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
     abstract: paper.abstract ?? "No abstract available.",
   }));
   const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-3.5-flash"}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-    }),
-    cache: "no-store",
+  const requestBody = JSON.stringify({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
   });
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const errorBody = (await response.json()) as { error?: { message?: string } };
-      detail = errorBody.error?.message ?? "";
-    } catch {
-      // ignore
+  // Try the main model first; if Google is overloaded (503) or limiting us (429), retry and then try backup models.
+  const models = Array.from(new Set([process.env.GEMINI_MODEL || "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]));
+  let response: Response | null = null;
+  let lastStatus = 0;
+  let lastDetail = "";
+  outer: for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const attemptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: requestBody,
+        cache: "no-store",
+      });
+      if (attemptResponse.ok) {
+        response = attemptResponse;
+        break outer;
+      }
+      lastStatus = attemptResponse.status;
+      try {
+        const errorBody = (await attemptResponse.json()) as { error?: { message?: string } };
+        lastDetail = errorBody.error?.message ?? "";
+      } catch {
+        lastDetail = "";
+      }
+      // Only retry when the problem is temporary (busy or rate limited). Otherwise move on to the next model.
+      if (lastStatus !== 503 && lastStatus !== 429) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
-    throw new Error(`Gemini could not evaluate paper relevance (status ${response.status}). ${detail}`.trim());
+  }
+  if (!response) {
+    throw new Error(`Gemini could not evaluate paper relevance (status ${lastStatus}). ${lastDetail}`.trim());
   }
   const payload = (await response.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
