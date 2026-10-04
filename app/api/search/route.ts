@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { callGemini } from "../../../lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,6 +12,7 @@ type SemanticPaper = {
   authors?: { name?: string }[];
   url?: string | null;
   fieldsOfStudy?: string[] | null;
+  source?: string;
 };
 
 type OpenAlexWork = {
@@ -49,11 +51,12 @@ async function fetchWithRetry(url: URL, init: RequestInit): Promise<Response> {
   return response;
 }
 
-async function semanticScholarSearch(query: string): Promise<SemanticPaper[]> {
+async function semanticScholarSearch(query: string, finance = false): Promise<SemanticPaper[]> {
   const url = new URL("https://api.semanticscholar.org/graph/v1/paper/search");
   url.searchParams.set("query", query);
   url.searchParams.set("limit", "20");
   url.searchParams.set("fields", PAPER_FIELDS);
+  if (finance) url.searchParams.set("fieldsOfStudy", "Economics,Business");
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (process.env.SEMANTIC_SCHOLAR_API_KEY) headers["x-api-key"] = process.env.SEMANTIC_SCHOLAR_API_KEY;
@@ -63,7 +66,7 @@ async function semanticScholarSearch(query: string): Promise<SemanticPaper[]> {
   if (!response.ok) throw new Error("Semantic Scholar could not retrieve papers right now.");
 
   const data = (await response.json()) as { data?: SemanticPaper[] };
-  return Array.isArray(data.data) ? data.data.filter((paper) => paper.paperId && paper.title) : [];
+  return Array.isArray(data.data) ? data.data.filter((paper) => paper.paperId && paper.title).map((paper) => ({ ...paper, source: "Semantic Scholar" })) : [];
 }
 
 // OpenAlex stores abstracts as {word: [positions]}; rebuild them into normal text.
@@ -77,13 +80,13 @@ function rebuildAbstract(index?: Record<string, number[]> | null): string | null
   return text ? text.slice(0, 1500) : null;
 }
 
-async function openAlexSearch(query: string): Promise<SemanticPaper[]> {
+async function openAlexSearch(query: string, finance = false): Promise<SemanticPaper[]> {
   const apiKey = process.env.OPENALEX_API_KEY;
   if (!apiKey) throw new Error("OpenAlex key is not set.");
 
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
-  url.searchParams.set("filter", "has_abstract:true");
+  url.searchParams.set("filter", finance ? "has_abstract:true,primary_topic.field.id:20|14" : "has_abstract:true");
   url.searchParams.set("per_page", "20");
   url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
   url.searchParams.set("api_key", apiKey);
@@ -108,8 +111,61 @@ async function openAlexSearch(query: string): Promise<SemanticPaper[]> {
         authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
         url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
         fieldsOfStudy: Array.from(new Set(fields)),
+        source: "OpenAlex",
       };
     });
+}
+
+// Best-effort RePEc/IDEAS search. IDEAS has no official search API, so this reads the public search page.
+// Any problem (blocked, changed layout, timeout) returns an empty list and is ignored silently.
+async function repecSearch(query: string): Promise<SemanticPaper[]> {
+  try {
+    const url = new URL("https://ideas.repec.org/cgi-bin/htsearch");
+    url.searchParams.set("q", query);
+    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(6000), headers: { Accept: "text/html" } });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const results: SemanticPaper[] = [];
+    const pattern = /<a href="(\/[pah]\/[^"#?]+\.html)"[^>]*>([^<]{10,300})<\/a>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(html)) && results.length < 8) {
+      const link = `https://ideas.repec.org${match[1]}`;
+      if (results.some((r) => r.url === link)) continue;
+      results.push({ paperId: link, title: match[2].replace(/\s+/g, " ").trim(), abstract: null, year: null, authors: [], url: link, fieldsOfStudy: ["Economics"], source: "RePEc" });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
+  const seen = new Set<string>();
+  const merged: SemanticPaper[] = [];
+  const longest = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < longest; i++) {
+    for (const list of lists) {
+      const paper = list[i];
+      if (!paper?.title) continue;
+      const key = paper.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(paper);
+    }
+  }
+  return merged;
+}
+
+// Finance mode: ask every source at once and mix the results. A failing source never breaks the search.
+async function findFinanceCandidates(query: string): Promise<SemanticPaper[]> {
+  const jobs: Promise<SemanticPaper[]>[] = [semanticScholarSearch(query, true), repecSearch(query)];
+  if (process.env.OPENALEX_API_KEY) jobs.unshift(openAlexSearch(query, true));
+  const settled = await Promise.allSettled(jobs);
+  const lists = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
+  if (settled.every((r) => r.status === "rejected")) {
+    throw new Error("Could not retrieve papers right now. Please try again in a moment.");
+  }
+  return mergeUnique(lists);
 }
 
 // Try OpenAlex first (if a key is set), then Semantic Scholar as a backup.
@@ -147,65 +203,15 @@ function extractJson(text: string) {
   return JSON.parse(trimmed.slice(start, end + 1)) as unknown;
 }
 
-async function rankPapers(question: string, candidates: SemanticPaper[]): Promise<RankedPaper[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("The server is missing GEMINI_API_KEY. Add it and try again.");
-
+async function rankPapers(question: string, candidates: SemanticPaper[], finance = false): Promise<RankedPaper[]> {
   const candidateText = candidates.map((paper, index) => ({
     id: paper.paperId,
     index: index + 1,
     title: paper.title,
     abstract: (paper.abstract ?? "No abstract available.").slice(0, 600),
   }));
-  const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
-  const requestBody = JSON.stringify({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-  });
-  // Try the main model first; if Google is overloaded (503) or limiting us (429), retry and then try backup models.
-  const models = Array.from(new Set([process.env.GEMINI_MODEL || "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]));
-  let response: Response | null = null;
-  let lastStatus = 0;
-  let lastDetail = "";
-  const deadline = Date.now() + 40_000;
-  outer: for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (Date.now() > deadline) break outer;
-      let attemptResponse: Response;
-      try {
-        attemptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: requestBody,
-          cache: "no-store",
-          signal: AbortSignal.timeout(20_000),
-        });
-      } catch {
-        lastStatus = 504;
-        lastDetail = "Gemini took too long to answer.";
-        break; // try the next model
-      }
-      if (attemptResponse.ok) {
-        response = attemptResponse;
-        break outer;
-      }
-      lastStatus = attemptResponse.status;
-      try {
-        const errorBody = (await attemptResponse.json()) as { error?: { message?: string } };
-        lastDetail = errorBody.error?.message ?? "";
-      } catch {
-        lastDetail = "";
-      }
-      // Only retry when the problem is temporary (busy or rate limited). Otherwise move on to the next model.
-      if (lastStatus !== 503 && lastStatus !== 429) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-  if (!response) {
-    throw new Error(`Gemini could not evaluate paper relevance (status ${lastStatus}). ${lastDetail}`.trim());
-  }
-  const payload = (await response.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+  const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.${finance ? " This is a finance and economics search. Treat terms like alpha, beta, herding, ESG, yield curve and market efficiency as finance terms, not general-science terms, and prefer empirical finance and economics papers (data-based studies) over purely theoretical or unrelated ones." : ""}\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
+  const text = await callGemini(prompt, "evaluate paper relevance");
   const parsed = extractJson(text);
   if (!Array.isArray(parsed)) throw new Error("Gemini returned an invalid relevance response.");
 
@@ -222,21 +228,23 @@ async function rankPapers(question: string, candidates: SemanticPaper[]): Promis
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { question?: unknown };
+    const body = await request.json() as { question?: unknown; field?: unknown };
+    const finance = body.field === "finance";
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question) return NextResponse.json({ error: "A research question is required." }, { status: 400 });
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
 
-    const candidates = (await findCandidates(searchTerms(question) || question)).slice(0, 12);
+    const query = searchTerms(question) || question;
+    const candidates = (finance ? await findFinanceCandidates(query) : await findCandidates(query)).slice(0, 12);
     if (!candidates.length) return NextResponse.json({ papers: [] });
-    const rankings = await rankPapers(question, candidates);
+    const rankings = await rankPapers(question, candidates, finance);
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
     const papers = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
-        fieldsOfStudy: paper.fieldsOfStudy ?? [], score: ranking?.score ?? 0, explanation: ranking?.explanation ?? "",
+        fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000), score: ranking?.score ?? 0, explanation: ranking?.explanation ?? "",
       };
     }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score);
     return NextResponse.json({ papers });
