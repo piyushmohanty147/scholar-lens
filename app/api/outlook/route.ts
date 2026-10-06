@@ -10,6 +10,15 @@ type Trend = { query: string; counts: { year: number; count: number }[] };
 const FIRST_YEAR = 2018;
 const LAST_YEAR = new Date().getFullYear() - 1; // last full year
 
+const AUDIENCES: Record<string, string> = {
+  student: "The reader is a student. Use simple, clear language, briefly explain technical terms, and make next actions about learning and project steps.",
+  researcher: "The reader is an academic researcher. Use precise language and emphasise research gaps, methods and open questions.",
+  startup: "The reader is a startup team. Emphasise practical opportunities, adoption and regulatory risks, and concrete next steps. Remember that papers do not show market data.",
+  finance: "The reader is a finance or economics analyst. Use technical language and emphasise empirical findings, risk factors and signals to monitor.",
+  consultant: "The reader is a consultant advising clients. Emphasise implications, risks to flag and a clear executive-style summary.",
+};
+const STRENGTHS = ["strong", "moderate", "weak", "inference"];
+
 function parseObject(text: string): Record<string, unknown> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -74,14 +83,27 @@ async function getPapers(query: string, startId: number): Promise<Evidence[]> {
     }));
 }
 
+// Removes source ids that do not exist, and marks claims with no valid source as "inference".
+function cleanItems(raw: unknown, valid: Set<string>) {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const r = item as Record<string, unknown>;
+    const sources = (Array.isArray(r.sources) ? r.sources : []).filter((s): s is string => typeof s === "string" && valid.has(s));
+    const claimed = typeof r.strength === "string" && STRENGTHS.includes(r.strength) ? r.strength : "inference";
+    return [{ point: String(r.point ?? ""), why: String(r.why ?? ""), sources, strength: sources.length === 0 ? "inference" : claimed }];
+  });
+}
+
 export async function POST(request: Request) {
   try {
     if (!process.env.OPENALEX_API_KEY) {
       return NextResponse.json({ error: "The server is missing OPENALEX_API_KEY." }, { status: 500 });
     }
-    const body = (await request.json()) as { project?: unknown; horizon?: unknown };
+    const body = (await request.json()) as { project?: unknown; horizon?: unknown; audience?: unknown };
     const project = typeof body.project === "string" ? body.project.trim() : "";
     const horizon = ["1", "3", "5"].includes(String(body.horizon)) ? String(body.horizon) : "3";
+    const audience = typeof body.audience === "string" && body.audience in AUDIENCES ? body.audience : "researcher";
     if (project.length < 20) return NextResponse.json({ error: "Describe your project in at least a sentence or two." }, { status: 400 });
     if (project.length > 1500) return NextResponse.json({ error: "Keep the description under 1,500 characters." }, { status: 400 });
 
@@ -95,7 +117,7 @@ export async function POST(request: Request) {
     }
     if (!queries.length) queries = [project.split(/\s+/).slice(0, 8).join(" ")];
 
-    // Step 2: gather evidence from OpenAlex (trend counts and recent papers).
+    // Step 2: gather evidence from OpenAlex.
     const trends = await Promise.all(queries.map(getTrend));
     const paperLists: Evidence[][] = [];
     let nextId = 1;
@@ -110,8 +132,19 @@ export async function POST(request: Request) {
     }
 
     // Step 3: ask Gemini to write the outlook using ONLY this evidence.
-    const prompt = `You are a careful research foresight analyst. Write an outlook for the project below, covering the next ${horizon} year(s). Use ONLY the evidence provided: yearly publication counts (research activity, NOT market outcomes) and recent paper abstracts. Do not invent statistics, companies or facts. When you infer something beyond the evidence, say so in the wording. Cite supporting papers by their ids (like "S1"). Be honest about uncertainty.\n\nReturn JSON with exactly this shape:\n{"summary": string (2-3 sentences), "trends": [{"name": string, "direction": "rising"|"flat"|"falling"|"unclear", "evidence": string}], "opportunities": [{"point": string, "why": string, "sources": [string]}], "risks": [{"point": string, "why": string, "sources": [string]}], "scenarios": [{"name": "Best case"|"Most likely"|"Worst case", "description": string, "confidence": "low"|"medium"|"high"}], "watch": [string], "caveat": string}\nGive 2-4 items per list. Scenarios must have exactly 3 entries.\n\nProject: ${project}\n\nYearly publication counts: ${JSON.stringify(trends)}\n\nRecent papers: ${JSON.stringify(evidence)}`;
-    const report = parseObject(await callGemini(prompt, "write the outlook"));
+    const prompt = `You are a careful research foresight analyst. Write an outlook for the project below, covering the next ${horizon} year(s). ${AUDIENCES[audience]} Use ONLY the evidence provided: yearly publication counts (research activity, NOT market outcomes) and recent paper abstracts. Do not invent statistics, companies, laws or facts. If something is your own reasoning beyond the evidence, mark its strength as "inference". Cite supporting papers by their ids (like "S1"). Be honest about uncertainty, and use low or medium confidence for long horizons.\n\nEvidence strength labels: "strong" = several papers clearly agree; "moderate" = one clear paper supports it; "weak" = only loosely related papers; "inference" = your own reasoning.\n\nReturn JSON with exactly this shape:\n{"summary": string (2-3 sentences), "trends": [{"name": string, "direction": "rising"|"flat"|"falling"|"unclear", "evidence": string}], "opportunities": [{"point": string, "why": string, "sources": [string], "strength": "strong"|"moderate"|"weak"|"inference"}], "risks": [{"point": string, "why": string, "sources": [string], "strength": "strong"|"moderate"|"weak"|"inference"}], "scenarios": [{"name": "Best case"|"Most likely"|"Worst case", "description": string, "confidence": "low"|"medium"|"high"}], "nextActions": [string], "readingList": [{"source": string, "reason": string}], "watch": [string], "caveat": string}\nGive 2-4 items per list, exactly 3 scenarios, 3-5 nextActions, and up to 5 readingList entries (source must be an id).\n\nProject: ${project}\n\nYearly publication counts: ${JSON.stringify(trends)}\n\nRecent papers: ${JSON.stringify(evidence)}`;
+    const raw = parseObject(await callGemini(prompt, "write the outlook"));
+
+    const valid = new Set(evidence.map((e) => e.id));
+    const report = {
+      ...raw,
+      opportunities: cleanItems(raw.opportunities, valid),
+      risks: cleanItems(raw.risks, valid),
+      nextActions: (Array.isArray(raw.nextActions) ? raw.nextActions : []).filter((x): x is string => typeof x === "string"),
+      readingList: (Array.isArray(raw.readingList) ? raw.readingList : []).filter(
+        (x): x is { source: string; reason: string } => !!x && typeof x === "object" && valid.has(String((x as Record<string, unknown>).source)),
+      ),
+    };
 
     return NextResponse.json({
       report,
