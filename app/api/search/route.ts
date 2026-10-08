@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { callGemini } from "../../../lib/gemini";
+import { allow } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -156,43 +157,30 @@ function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
   return merged;
 }
 
-// Finance mode: ask every source at once and mix the results. A failing source never breaks the search.
-async function findFinanceCandidates(query: string): Promise<SemanticPaper[]> {
-  const jobs: Promise<SemanticPaper[]>[] = [semanticScholarSearch(query, true), repecSearch(query)];
-  if (process.env.OPENALEX_API_KEY) jobs.unshift(openAlexSearch(query, true));
+// Ask Gemini for 2 extra search phrasings, so one badly worded question does not hide good papers.
+async function planQueries(question: string, fallback: string): Promise<string[]> {
+  try {
+    const text = await callGemini(`Write 2 short academic search queries (3 to 6 words each) that would find papers answering this question. Use different wording in each. Return JSON only: {"queries": ["...","..."]}\n\nQuestion: ${question}`, "plan the search");
+    const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { queries?: unknown };
+    const extra = (Array.isArray(parsed.queries) ? parsed.queries : []).filter((q): q is string => typeof q === "string" && q.trim().length > 2).slice(0, 2);
+    return [fallback, ...extra];
+  } catch {
+    return [fallback];
+  }
+}
+
+// Ask every source at once and mix the results. A failing source never breaks the search.
+async function findCandidates(question: string, query: string, finance: boolean): Promise<SemanticPaper[]> {
+  const queries = await planQueries(question, query);
+  const jobs: Promise<SemanticPaper[]>[] = [];
+  if (process.env.OPENALEX_API_KEY) for (const q of queries) jobs.push(openAlexSearch(q, finance));
+  jobs.push(semanticScholarSearch(queries[0], finance));
+  if (finance) jobs.push(repecSearch(queries[0]));
   const settled = await Promise.allSettled(jobs);
-  const lists = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
   if (settled.every((r) => r.status === "rejected")) {
     throw new Error("Could not retrieve papers right now. Please try again in a moment.");
   }
-  return mergeUnique(lists);
-}
-
-// Try OpenAlex first (if a key is set), then Semantic Scholar as a backup.
-async function findCandidates(query: string): Promise<SemanticPaper[]> {
-  const errors: string[] = [];
-  let anySourceWorked = false;
-
-  if (process.env.OPENALEX_API_KEY) {
-    try {
-      const results = await openAlexSearch(query);
-      anySourceWorked = true;
-      if (results.length) return results;
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : "OpenAlex failed.");
-    }
-  }
-
-  try {
-    const results = await semanticScholarSearch(query);
-    anySourceWorked = true;
-    if (results.length) return results;
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : "Semantic Scholar failed.");
-  }
-
-  if (anySourceWorked) return [];
-  throw new Error(`Could not retrieve papers right now. ${errors.join(" ")} Please try again in a moment.`);
+  return mergeUnique(settled.map((r) => (r.status === "fulfilled" ? r.value : [])));
 }
 
 function extractJson(text: string) {
@@ -228,6 +216,10 @@ async function rankPapers(question: string, candidates: SemanticPaper[], finance
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    if (!allow(ip, 30)) {
+      return NextResponse.json({ error: "You've reached the free limit. Please try again later." }, { status: 429 });
+    }
     const body = await request.json() as { question?: unknown; field?: unknown };
     const finance = body.field === "finance";
     const question = typeof body.question === "string" ? body.question.trim() : "";
@@ -235,18 +227,24 @@ export async function POST(request: Request) {
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
 
     const query = searchTerms(question) || question;
-    const candidates = (finance ? await findFinanceCandidates(query) : await findCandidates(query)).slice(0, 12);
+    const candidates = (await findCandidates(question, query, finance)).slice(0, 30);
     if (!candidates.length) return NextResponse.json({ papers: [] });
-    const rankings = await rankPapers(question, candidates, finance);
+
+    // If ranking fails, still show the results instead of an error.
+    let rankings: RankedPaper[] = [];
+    try { rankings = await rankPapers(question, candidates, finance); } catch { rankings = []; }
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
+    const ranked = rankings.length > 0;
+
     const papers = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
-        fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000), score: ranking?.score ?? 0, explanation: ranking?.explanation ?? "",
+        fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
+        score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
       };
-    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score);
+    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
     return NextResponse.json({ papers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to search for papers.";
