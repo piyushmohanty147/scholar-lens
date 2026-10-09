@@ -2,21 +2,33 @@
 
 import { useEffect, useState } from "react";
 
-type Item = { point?: string; why?: string; sources?: string[]; strength?: string };
+type Item = { point?: string; why?: string; action?: string; sources?: string[]; strength?: string };
 type Report = {
   summary?: string;
-  trends?: { name?: string; direction?: string; evidence?: string }[];
+  bottomLine?: string;
+  trends?: { name?: string; direction?: string; evidence?: string; sources?: string[] }[];
+  consensus?: { point?: string; sources?: string[] }[];
+  debates?: Item[];
   opportunities?: Item[];
   risks?: Item[];
-  scenarios?: { name?: string; description?: string; confidence?: string }[];
-  nextActions?: string[];
+  scenarios?: { name?: string; description?: string; likelihood?: string; confidence?: string; drivers?: string[]; signals?: string[] }[];
+  timeline?: { period?: string; expect?: string }[];
+  indicators?: { signal?: string; why?: string }[];
+  nextActions?: (string | { action?: string; when?: string })[];
+  questionsForExperts?: string[];
+  glossary?: { term?: string; meaning?: string }[];
   readingList?: { source?: string; reason?: string }[];
   watch?: string[];
+  gaps?: string[];
   caveat?: string;
 };
-type Trend = { query: string; counts: { year: number; count: number }[] };
+type Stats = { rawGrowthPct: number | null; relativeGrowthPct: number | null; signal: string } | null;
+type Trend = { query: string; counts: { year: number; count: number }[]; stats?: Stats };
 type Source = { id: string; title: string; year: number | null; url: string | null };
-type Result = { report: Report; trends: Trend[]; sources: Source[]; horizon: string };
+type Group = { name: string; count: number };
+type Subtopic = { name: string; recent: number; prior: number; shareChangePct: number | null };
+type Landscape = { countries: Group[]; institutions: Group[]; journals: Group[]; funders: Group[] };
+type Result = { report: Report; trends: Trend[]; subtopics?: Subtopic[]; landscape?: Landscape; sources: Source[]; horizon: string; papersAnalysed?: number };
 type Saved = { id: string; project: string; audience: string; at: number; result: Result };
 
 const AUDIENCES = [
@@ -80,11 +92,22 @@ export default function Outlook() {
   const cites = (ids?: string[]) => (ids && ids.length ? ` [${ids.join(", ")}]` : "");
   const example = AUDIENCES.find((a) => a.key === audience)?.example ?? "";
   const findSource = (id?: string) => result?.sources.find((s) => s.id === id);
-  const list = (items?: Item[]) => (
+  const list = (items?: Item[], actionLabel?: string) => (
     <ul>{items?.map((o, i) => (
-      <li key={i}><strong>{o.point}</strong> {o.why}{cites(o.sources)} <span className="str">evidence: {o.strength}</span></li>
+      <li key={i}>
+        <strong>{o.point}</strong> {o.why}{cites(o.sources)} <span className="str">evidence: {o.strength}</span>
+        {o.action ? <div className="m"><strong>{actionLabel}:</strong> {o.action}</div> : null}
+      </li>
     ))}</ul>
   );
+  const groupList = (title: string, g?: Group[]) => (g && g.length ? (
+    <div>
+      <div className="m"><strong>{title}</strong></div>
+      <ul>{g.map((x, i) => <li key={i}>{x.name} <span className="m">({x.count.toLocaleString()} papers)</span></li>)}</ul>
+    </div>
+  ) : null);
+  const pct = (n: number | null | undefined) => (n === null || n === undefined ? "n/a" : `${n > 0 ? "+" : ""}${n}%`);
+  const hasLandscape = !!result?.landscape && (result.landscape.countries.length + result.landscape.institutions.length + result.landscape.journals.length + result.landscape.funders.length > 0);
 
   return (
     <main className="ol">
@@ -105,8 +128,11 @@ export default function Outlook() {
         .ol .ex{display:block;margin-top:8px;border:1px dashed var(--line);background:none;color:var(--muted);border-radius:10px;padding:8px 12px;font:inherit;font-size:.82rem;cursor:pointer;text-align:left}
         .ol .msg{margin-top:24px;color:var(--muted)}.ol .err{color:#d92d20}
         .ol .box{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-        .ol ul{margin:0;padding-left:20px}.ol li{margin-bottom:8px}.ol .m{color:var(--muted);font-size:.85rem}
+        .ol ul{margin:0;padding-left:20px}.ol li{margin-bottom:10px}.ol .m{color:var(--muted);font-size:.85rem}
         .ol .str{display:inline-block;font-size:.7rem;padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
+        .ol .chip{display:inline-block;font-size:.75rem;padding:2px 10px;border-radius:999px;background:var(--line);color:var(--text);margin:2px 6px 2px 0}
+        .ol .bottom{margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);border-radius:6px;font-weight:600}
+        .ol .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
         .ol .bars{display:flex;align-items:flex-end;gap:4px;height:60px;margin:6px 0}
         .ol .bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
         .ol .yrs{display:flex;gap:4px;font-size:.65rem;color:var(--muted)}.ol .yrs span{flex:1;text-align:center}
@@ -144,7 +170,12 @@ export default function Outlook() {
 
       {r && result && (
         <>
-          <div className="box"><h2>Summary ({result.horizon}-year outlook)</h2><p style={{ margin: 0 }}>{r.summary}</p></div>
+          <div className="box">
+            <h2>Summary ({result.horizon}-year outlook)</h2>
+            <p style={{ margin: 0 }}>{r.summary}</p>
+            {r.bottomLine ? <div className="bottom">Bottom line: {r.bottomLine}</div> : null}
+            <p className="m" style={{ marginBottom: 0 }}>Based on {result.papersAnalysed ?? result.sources.length} papers and research-activity data from OpenAlex.</p>
+          </div>
 
           <div className="box">
             <h2>Research activity (papers per year)</h2>
@@ -155,19 +186,94 @@ export default function Outlook() {
                   <div className="m">{t.query}</div>
                   <div className="bars">{t.counts.map((c) => <div key={c.year} className="bar" title={`${c.year}: ${c.count}`} style={{ height: `${(c.count / max) * 100}%` }} />)}</div>
                   <div className="yrs">{t.counts.map((c) => <span key={c.year}>{String(c.year).slice(2)}</span>)}</div>
+                  {t.stats ? (
+                    <div>
+                      <span className="chip">Signal: {t.stats.signal}</span>
+                      <span className="chip">Share of all research: {pct(t.stats.relativeGrowthPct)}</span>
+                      <span className="chip">Raw paper count: {pct(t.stats.rawGrowthPct)}</span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
-            <ul>{r.trends?.map((t, i) => <li key={i}><strong>{t.name}</strong> ({t.direction}): {t.evidence}</li>)}</ul>
-            <p className="m" style={{ marginBottom: 0 }}>Paper counts show research attention, not market results.</p>
+            <ul>{r.trends?.map((t, i) => <li key={i}><strong>{t.name}</strong> ({t.direction}): {t.evidence}{cites(t.sources)}</li>)}</ul>
+            <p className="m" style={{ marginBottom: 0 }}>Share of all research removes the general growth in publishing. Paper counts show research attention, not market results.</p>
           </div>
 
-          <div className="box"><h2>Opportunities</h2>{list(r.opportunities)}</div>
-          <div className="box"><h2>Risks and possible losses</h2>{list(r.risks)}
-            <p className="m" style={{ marginBottom: 0 }}>Evidence labels: strong = several papers agree; moderate = one clear paper; weak = loosely related; inference = the AI&apos;s own reasoning.</p></div>
-          <div className="box"><h2>Scenarios</h2><ul>{r.scenarios?.map((s, i) => <li key={i}><strong>{s.name}</strong> (confidence: {s.confidence}): {s.description}</li>)}</ul></div>
-          <div className="box"><h2>Next actions</h2><ul>{r.nextActions?.map((a, i) => <li key={i}>{a}</li>)}</ul></div>
+          {result.subtopics && result.subtopics.length > 0 && (
+            <div className="box">
+              <h2>Subtopics inside this field</h2>
+              <ul>{result.subtopics.map((s, i) => (
+                <li key={i}><strong>{s.name}</strong> <span className="m">{s.recent.toLocaleString()} papers in the last 3 years (was {s.prior.toLocaleString()}) · share of field {pct(s.shareChangePct)}</span></li>
+              ))}</ul>
+              <p className="m" style={{ marginBottom: 0 }}>A positive share change means the subtopic is growing faster than the field as a whole.</p>
+            </div>
+          )}
+
+          {r.consensus && r.consensus.length > 0 && (
+            <div className="box"><h2>What the research agrees on</h2>
+              <ul>{r.consensus.map((c, i) => <li key={i}>{c.point}{cites(c.sources)}</li>)}</ul></div>
+          )}
+          {r.debates && r.debates.length > 0 && (
+            <div className="box"><h2>Open debates</h2>{list(r.debates)}</div>
+          )}
+
+          <div className="box"><h2>Opportunities</h2>{list(r.opportunities, "How to act")}</div>
+          <div className="box"><h2>Risks and possible losses</h2>{list(r.risks, "How to reduce it")}
+            <p className="m" style={{ marginBottom: 0 }}>Evidence labels: strong = several sources agree; moderate = one clear source or clear data; weak = loosely related; inference = the AI&apos;s own reasoning. S = paper, D = research-activity data.</p></div>
+
+          <div className="box"><h2>Scenarios</h2>
+            <ul>{r.scenarios?.map((s, i) => (
+              <li key={i}>
+                <strong>{s.name}</strong> (likelihood: {s.likelihood}, confidence: {s.confidence}): {s.description}
+                {s.drivers && s.drivers.length > 0 ? <div className="m"><strong>Drivers:</strong> {s.drivers.join("; ")}</div> : null}
+                {s.signals && s.signals.length > 0 ? <div className="m"><strong>Signs it is happening:</strong> {s.signals.join("; ")}</div> : null}
+              </li>
+            ))}</ul></div>
+
+          {r.timeline && r.timeline.length > 0 && (
+            <div className="box"><h2>Timeline</h2>
+              <ul>{r.timeline.map((t, i) => <li key={i}><strong>{t.period}:</strong> {t.expect}</li>)}</ul></div>
+          )}
+          {r.indicators && r.indicators.length > 0 && (
+            <div className="box"><h2>Indicators to track</h2>
+              <ul>{r.indicators.map((t, i) => <li key={i}><strong>{t.signal}</strong> {t.why}</li>)}</ul></div>
+          )}
+
+          {hasLandscape && (
+            <div className="box">
+              <h2>Who is doing the research</h2>
+              <div className="two">
+                {groupList("Countries", result.landscape?.countries)}
+                {groupList("Institutions", result.landscape?.institutions)}
+                {groupList("Journals", result.landscape?.journals)}
+                {groupList("Funders", result.landscape?.funders)}
+              </div>
+              <p className="m" style={{ marginBottom: 0 }}>Counts are papers published in the last 3 years on your core topic.</p>
+            </div>
+          )}
+
+          <div className="box"><h2>Next actions</h2>
+            <ul>{r.nextActions?.map((a, i) => {
+              const text = typeof a === "string" ? a : a.action;
+              const when = typeof a === "string" ? "" : a.when;
+              return <li key={i}>{when ? <strong>{when}: </strong> : null}{text}</li>;
+            })}</ul></div>
+
+          {r.questionsForExperts && r.questionsForExperts.length > 0 && (
+            <div className="box"><h2>Questions to ask experts</h2>
+              <ul>{r.questionsForExperts.map((q, i) => <li key={i}>{q}</li>)}</ul></div>
+          )}
           <div className="box"><h2>What to watch</h2><ul>{r.watch?.map((w, i) => <li key={i}>{w}</li>)}</ul></div>
+          {r.gaps && r.gaps.length > 0 && (
+            <div className="box"><h2>What this evidence does not cover</h2>
+              <ul>{r.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul></div>
+          )}
+          {r.glossary && r.glossary.length > 0 && (
+            <div className="box"><h2>Glossary</h2>
+              <ul>{r.glossary.map((g, i) => <li key={i}><strong>{g.term}:</strong> {g.meaning}</li>)}</ul></div>
+          )}
+
           <div className="box"><h2>Reading list</h2>
             <ul>{r.readingList?.map((x, i) => {
               const s = findSource(x.source);
