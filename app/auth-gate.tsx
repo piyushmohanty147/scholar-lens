@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "../lib/supabase";
 
 type Limit = { message: string; kind: string; plan: string };
+type Rec = Record<string, unknown>;
+
+const PUBLIC_PATHS = ["/privacy", "/terms", "/refund", "/contact"];
+const LINKS: [string, string][] = [["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
 // The server routes read the sign-in token from this cookie.
 function syncCookie(session: Session | null) {
@@ -27,8 +33,93 @@ function resetInfo(now: number) {
   return { left: `${Math.floor(mins / 60)}h ${mins % 60}m`, at };
 }
 
+const str = (x: unknown) => (typeof x === "string" ? x : "");
+const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
+const obj = (x: unknown): Rec => (x && typeof x === "object" ? (x as Rec) : {});
+
+// Saves every finished outlook to the signed-in user's library.
+async function saveReport(userId: string, requestBody: string, data: Rec) {
+  try {
+    const body = JSON.parse(requestBody) as Rec;
+    const project = str(body.project).trim();
+    if (!project || !data.report) return;
+    await supabase.from("saved_reports").insert({
+      user_id: userId, project, audience: str(body.audience), horizon: str(body.horizon), result: data,
+    });
+  } catch { /* saving is best effort */ }
+}
+
+// Saves every paper the user opens with Deep dive.
+async function savePaper(userId: string, requestBody: string, data: Rec) {
+  try {
+    const body = JSON.parse(requestBody) as Rec;
+    const paperId = str(body.paperId);
+    const title = str(body.title).trim();
+    if (!paperId || !title) return;
+    const meta = obj(data.meta);
+    const analysis = obj(data.analysis);
+    const authors = arr(meta.authors).map((a) => str(obj(a).name)).filter(Boolean);
+    const oa = obj(meta.openAccess);
+    const link = str(oa.url) || (paperId.startsWith("http") ? paperId : "");
+    await supabase.from("saved_papers").upsert(
+      {
+        user_id: userId, paper_id: paperId, title,
+        year: typeof meta.year === "number" ? meta.year : null,
+        authors, venue: str(meta.venue) || null, url: link || null,
+        summary: str(analysis.plainSummary) || null,
+      },
+      { onConflict: "user_id,paper_id" },
+    );
+  } catch { /* saving is best effort */ }
+}
+
+function Landing({ box }: { box: ReactNode }) {
+  return (
+    <div className="wrap">
+      <div className="tag">AI research intelligence</div>
+      <h1>Scholar Lens</h1>
+      <p className="sub">Find the papers that truly answer your question, understand them in depth, and get an evidence-based outlook for your project.</p>
+      {box}
+
+      <section className="sec">
+        <h2>What you get</h2>
+        <div className="feat">
+          <div className="fc"><h3>Find the right papers</h3><p>Ask a research question in plain language. Scholar Lens searches several scholarly sources and ranks papers by how well they answer your question.</p></div>
+          <div className="fc"><h3>Deep dive on any paper</h3><p>Get a plain-language summary, study design, key findings, strengths, limitations, who cites it, related papers and a link to the free full text when one exists.</p></div>
+          <div className="fc"><h3>Project Outlook</h3><p>Describe your project and get opportunities, risks, scenarios and indicators to track, grounded in research activity data and recent papers.</p></div>
+          <div className="fc"><h3>Your library</h3><p>Every outlook and paper you study is saved to your account. Export reports as documents and your papers as BibTeX citations.</p></div>
+        </div>
+      </section>
+
+      <section className="sec">
+        <h2>How it works</h2>
+        <ol>
+          <li>Type your research question or describe your project.</li>
+          <li>We gather papers and research-activity data from open scholarly sources.</li>
+          <li>AI ranks and explains the evidence, and every claim points back to its sources.</li>
+        </ol>
+      </section>
+
+      <section className="sec">
+        <h2>Who it is for</h2>
+        <p>Students writing projects, researchers scanning a new field, startup teams checking what research says, and analysts and consultants who need a fast evidence-based view.</p>
+      </section>
+
+      <section className="sec">
+        <h2>Questions</h2>
+        <details><summary>Is it free?</summary><p>You can start free, with daily limits on searches, deep dives and project outlooks. Paid plans with higher limits are coming.</p></details>
+        <details><summary>Where does the information come from?</summary><p>Paper data comes from open scholarly sources such as OpenAlex and Semantic Scholar. AI is used to rank papers and to write summaries and outlooks.</p></details>
+        <details><summary>How accurate is it?</summary><p>Deep dives are written from each paper&apos;s abstract and public data, not the full text, and AI can make mistakes. Always check the original paper before relying on a detail.</p></details>
+        <details><summary>Is the outlook financial or professional advice?</summary><p>No. Outlooks show what published research suggests. Research activity is not the same as real-world or market outcomes.</p></details>
+      </section>
+    </div>
+  );
+}
+
 export default function AuthGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,6 +128,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(Date.now());
   const [joined, setJoined] = useState(false);
   const [joinMsg, setJoinMsg] = useState("");
+
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   useEffect(() => {
     if (!supabaseConfigured) { setReady(true); return; }
@@ -55,11 +148,24 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
 
-  // Watches replies from our own API; when the server says "limit reached", show the upgrade window.
+  // Watches replies from our own API: shows the limit window and saves finished results to the library.
   useEffect(() => {
     const original = window.fetch;
     window.fetch = async (...args: Parameters<typeof fetch>) => {
       const res = await original(...args);
+      try {
+        const [input, init] = args;
+        const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
+        const body = init?.body;
+        const userId = sessionRef.current?.user.id;
+        if (res.ok && userId && init?.method === "POST" && typeof body === "string") {
+          if (url.includes("/api/outlook")) {
+            res.clone().json().then((d) => saveReport(userId, body, obj(d))).catch(() => {});
+          } else if (url.includes("/api/paper-detail")) {
+            res.clone().json().then((d) => savePaper(userId, body, obj(d))).catch(() => {});
+          }
+        }
+      } catch { /* never block the real request */ }
       if (res.status === 429) {
         try {
           const data = (await res.clone().json()) as { code?: string; error?: string; kind?: string; plan?: string };
@@ -110,21 +216,31 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const styles = `
     .ag{--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
     @media (prefers-color-scheme:dark){.ag{--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
-    .ag .wrap{max-width:460px;margin:0 auto;padding:64px 16px;text-align:center}
+    body{background:#fafaf7}@media (prefers-color-scheme:dark){body{background:#12151c}}
+    .ag .wrap{max-width:640px;margin:0 auto;padding:56px 16px 24px;text-align:center}
     .ag h1{font-size:2rem;margin:4px 0}.ag .tag{color:var(--accent);font-size:.8rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
     .ag .sub{color:var(--muted);margin:8px 0 24px}
-    .ag .box{padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:left}
+    .ag .box{max-width:460px;margin:0 auto;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:left}
     .ag .btn{display:block;width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:12px;font:inherit;font-weight:600;cursor:pointer}
     .ag .btn.main{background:var(--accent);border-color:var(--accent);color:#fff}
     .ag .btn:disabled{opacity:.6;cursor:default}
     .ag input{width:100%;box-sizing:border-box;margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit}
     .ag .or{text-align:center;color:var(--muted);font-size:.8rem;margin:14px 0 2px}
     .ag .msg{margin:12px 0 0;font-size:.88rem;color:var(--muted)}
-    .ag .small{margin-top:18px;font-size:.78rem;color:var(--muted);text-align:center}
-    .ag .bar{max-width:760px;margin:0 auto;padding:10px 16px 0;display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:.8rem;color:var(--muted)}
-    .ag .bar button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+    .ag .small{margin-top:14px;font-size:.78rem;color:var(--muted);text-align:center}
+    .ag .sec{margin-top:40px;text-align:left}.ag .sec h2{font-size:1.2rem;margin:0 0 10px}
+    .ag .sec p,.ag .sec li{font-size:.94rem;color:var(--muted);line-height:1.55}.ag .sec ol{padding-left:20px;margin:0}
+    .ag .feat{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+    .ag .fc{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px}
+    .ag .fc h3{margin:0 0 6px;font-size:.98rem}.ag .fc p{margin:0;font-size:.86rem}
+    .ag details{border-bottom:1px solid var(--line);padding:10px 0}.ag summary{cursor:pointer;font-weight:600;font-size:.94rem}
+    .ag details p{margin:8px 0 0}
+    .ag .foot{max-width:760px;margin:28px auto 0;padding:16px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line)}
+    .ag .foot a{color:var(--muted)}
+    .ag .bar{max-width:760px;margin:0 auto;padding:10px 16px 0;display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+    .ag .bar button,.ag .bar a.lib{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer;text-decoration:none}
     .ag .shade{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
-    .ag .modal{max-width:440px;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+    .ag .modal{max-width:440px;width:100%;max-height:90vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
     .ag .modal h2{margin:0 0 6px;font-size:1.3rem}
     .ag .modal p{margin:0 0 12px;color:var(--muted);font-size:.92rem}
     .ag .modal ul{margin:0 0 16px;padding-left:20px;font-size:.92rem}.ag .modal li{margin-bottom:6px}
@@ -132,42 +248,59 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .modal .btn{margin-top:8px}
   `;
 
+  const footer = (
+    <footer className="foot">
+      {LINKS.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+      <span>© {new Date().getFullYear()} Scholar Lens</span>
+    </footer>
+  );
+
+  // Legal pages are public: no sign-in needed.
+  if (PUBLIC_PATHS.includes(pathname ?? "")) {
+    return (
+      <div className="ag">
+        <style>{styles}</style>
+        {children}
+        {footer}
+      </div>
+    );
+  }
+
   if (!ready) {
     return (
       <div className="ag">
         <style>{styles}</style>
-        <div className="wrap">
-          <div className="tag">AI research intelligence</div>
-          <h1>Scholar Lens</h1>
-          <p className="sub">Find the papers that truly answer your question, understand them in depth, and get an evidence-based outlook for your project.</p>
-        </div>
+        <Landing box={null} />
+        {footer}
       </div>
     );
   }
 
   if (!session) {
+    const box = (
+      <>
+        <div className="box">
+          {!supabaseConfigured ? (
+            <p className="msg">Sign-in is not set up yet. The site owner needs to add the Supabase keys.</p>
+          ) : (
+            <>
+              <button className="btn main" onClick={google} disabled={busy}>Continue with Google</button>
+              <div className="or">or use your email</div>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <button className="btn" onClick={emailLink} disabled={busy}>Email me a sign-in link</button>
+              {msg ? <p className="msg">{msg}</p> : null}
+            </>
+          )}
+        </div>
+        <p className="small">New here? Either option creates your account automatically. Already registered? Use the same option to sign back in.</p>
+        <p className="small">Free to start. Results are based on published research and are not financial or professional advice.</p>
+      </>
+    );
     return (
       <div className="ag">
         <style>{styles}</style>
-        <div className="wrap">
-          <div className="tag">AI research intelligence</div>
-          <h1>Scholar Lens</h1>
-          <p className="sub">Find the papers that truly answer your question, understand them in depth, and get an evidence-based outlook for your project.</p>
-          <div className="box">
-            {!supabaseConfigured ? (
-              <p className="msg">Sign-in is not set up yet. The site owner needs to add the Supabase keys.</p>
-            ) : (
-              <>
-                <button className="btn main" onClick={google} disabled={busy}>Continue with Google</button>
-                <div className="or">or use your email</div>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-                <button className="btn" onClick={emailLink} disabled={busy}>Email me a sign-in link</button>
-                {msg ? <p className="msg">{msg}</p> : null}
-              </>
-            )}
-          </div>
-          <p className="small">Free to start. Results are based on published research and are not financial or professional advice.</p>
-        </div>
+        <Landing box={box} />
+        {footer}
       </div>
     );
   }
@@ -179,9 +312,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <style>{styles}</style>
       <div className="bar">
         <span>{session.user.email}</span>
+        <Link className="lib" href="/library">My library</Link>
         <button onClick={signOut}>Sign out</button>
       </div>
       {children}
+      {footer}
 
       {limit && (
         <div className="shade" onClick={() => setLimit(null)}>
@@ -193,7 +328,6 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             <ul>
               <li>Many more project outlooks, searches and deep dives every day</li>
               <li>Priority access to new features</li>
-              <li>Saved reports across all your devices</li>
             </ul>
             {joined ? (
               <p><strong>You are on the waitlist. We will email you when Pro opens.</strong></p>
