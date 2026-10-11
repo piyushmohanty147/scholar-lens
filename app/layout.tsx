@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AuthGate from "./auth-gate";
 
@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   description: "AI-powered research paper discovery, deep dives and project outlooks",
   keywords: ["research papers", "paper search", "literature review", "research forecasting", "project outlook"],
   verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION },
+  icons: { icon: "/pwa-icon/192", apple: "/pwa-icon/192" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#2f5bea",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
