@@ -120,6 +120,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,6 +129,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(Date.now());
   const [joined, setJoined] = useState(false);
   const [joinMsg, setJoinMsg] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => { sessionRef.current = session; }, [session]);
 
@@ -147,6 +149,23 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
+
+  // Closes the account menu when you tap outside it or press Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   // Watches replies from our own API: shows the limit window and saves finished results to the library.
   useEffect(() => {
@@ -200,6 +219,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    setMenuOpen(false);
     await supabase.auth.signOut();
     syncCookie(null);
     setSession(null);
@@ -237,8 +257,16 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag details p{margin:8px 0 0}
     .ag .foot{max-width:760px;margin:28px auto 0;padding:16px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line)}
     .ag .foot a{color:var(--muted)}
-    .ag .bar{max-width:760px;margin:0 auto;padding:10px 16px 0;display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
-    .ag .bar button,.ag .bar a.lib{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer;text-decoration:none}
+    .ag .bar{max-width:760px;margin:0 auto;padding:12px 16px 0;display:flex;justify-content:flex-end;position:relative}
+    .ag .avatar{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:linear-gradient(135deg,#5b7cff,#a37bff);color:#fff;font:inherit;font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+    .ag .avatar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .ag .menu{position:absolute;right:16px;top:58px;z-index:40;width:250px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.35);overflow:hidden}
+    .ag .menu .who{padding:14px 16px;border-bottom:1px solid var(--line)}
+    .ag .menu .who b{display:block;font-size:.95rem;word-break:break-word}
+    .ag .menu .who span{display:block;font-size:.8rem;color:var(--muted);word-break:break-all;margin-top:2px}
+    .ag .menu a,.ag .menu button{display:block;width:100%;box-sizing:border-box;text-align:left;padding:12px 16px;background:none;border:0;color:var(--text);font:inherit;font-size:.92rem;text-decoration:none;cursor:pointer}
+    .ag .menu a:hover,.ag .menu button:hover{background:var(--line)}
+    .ag .menu .sep{border-top:1px solid var(--line)}
     .ag .shade{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
     .ag .modal{max-width:440px;width:100%;max-height:90vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
     .ag .modal h2{margin:0 0 6px;font-size:1.3rem}
@@ -306,14 +334,30 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   const reset = resetInfo(now);
+  const meta = obj(session.user.user_metadata);
+  const userEmail = session.user.email ?? "";
+  const name = str(meta.full_name) || str(meta.name);
+  const initial = (name || userEmail || "?").trim().charAt(0).toUpperCase();
 
   return (
     <div className="ag">
       <style>{styles}</style>
-      <div className="bar">
-        <span>{session.user.email}</span>
-        <Link className="lib" href="/library">My library</Link>
-        <button onClick={signOut}>Sign out</button>
+      <div className="bar" ref={menuRef}>
+        <button type="button" className="avatar" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
+          {initial}
+        </button>
+        {menuOpen && (
+          <div className="menu" role="menu">
+            <div className="who">
+              <b>{name || "Your account"}</b>
+              <span>{userEmail}</span>
+            </div>
+            <Link href="/library" role="menuitem" onClick={() => setMenuOpen(false)}>My library</Link>
+            <Link href="/contact" role="menuitem" onClick={() => setMenuOpen(false)}>Help and contact</Link>
+            <Link href="/privacy" role="menuitem" onClick={() => setMenuOpen(false)}>Privacy policy</Link>
+            <button type="button" className="sep" role="menuitem" onClick={signOut}>Sign out</button>
+          </div>
+        )}
       </div>
       {children}
       {footer}
