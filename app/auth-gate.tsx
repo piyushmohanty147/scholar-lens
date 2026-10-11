@@ -257,7 +257,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag details p{margin:8px 0 0}
     .ag .foot{max-width:760px;margin:28px auto 0;padding:16px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line)}
     .ag .foot a{color:var(--muted)}
-    .ag .bar{max-width:760px;margin:0 auto;padding:12px 16px 0;display:flex;justify-content:flex-end;position:relative}
+    .ag .bar{width:100%;box-sizing:border-box;padding:12px 16px 0;display:flex;justify-content:flex-end;position:relative}
     .ag .avatar{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:linear-gradient(135deg,#5b7cff,#a37bff);color:#fff;font:inherit;font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
     .ag .avatar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     .ag .menu{position:absolute;right:16px;top:58px;z-index:40;width:250px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.35);overflow:hidden}
