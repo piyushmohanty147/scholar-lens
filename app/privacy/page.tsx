@@ -23,6 +23,7 @@ export default function Page() {
 
       <h2>Who processes it</h2>
       <p>We rely on these providers to operate the service: Supabase (sign-in and database), Vercel (hosting), Google (Google sign-in and the Gemini AI service that writes summaries and outlooks), OpenAlex and Semantic Scholar (scholarly paper data), and Razorpay (payments). The text of your questions and project descriptions is sent to the AI and paper-search providers so they can return results. Each provider handles data under its own terms and privacy policy.</p>
+      <p>Please do not enter confidential, personal or sensitive information into your questions or project descriptions. Text you submit is sent to third-party AI services and may be handled under their terms, which can include use to improve their services.</p>
 
       <h2>Cookies and browser storage</h2>
       <p>We store a sign-in cookie so the site knows who you are. Reports you generate may also be saved in your browser on your own device. Clearing your browser data removes those local copies.</p>
