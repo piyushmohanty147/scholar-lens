@@ -11,7 +11,7 @@ type Limit = { message: string; kind: string; plan: string };
 type Rec = Record<string, unknown>;
 
 const PUBLIC_PATHS = ["/privacy", "/terms", "/refund", "/contact"];
-const LINKS: [string, string][] = [["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
+const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
 // The server routes read the sign-in token from this cookie.
 function syncCookie(session: Session | null) {
@@ -103,6 +103,11 @@ function Landing({ box }: { box: ReactNode }) {
       <section className="sec">
         <h2>Who it is for</h2>
         <p>Students writing projects, researchers scanning a new field, startup teams checking what research says, and analysts and consultants who need a fast evidence-based view.</p>
+      </section>
+
+      <section className="sec">
+        <h2>Free research guides</h2>
+        <p>New to this? Read our short guides on <Link href="/guides/how-to-do-a-literature-review">doing a literature review</Link>, <Link href="/guides/how-to-read-a-research-paper-quickly">reading a paper quickly</Link> and <Link href="/guides/how-to-tell-if-a-research-topic-is-growing">telling whether a topic is growing</Link>.</p>
       </section>
 
       <section className="sec">
@@ -250,6 +255,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .small{margin-top:14px;font-size:.78rem;color:var(--muted);text-align:center}
     .ag .sec{margin-top:40px;text-align:left}.ag .sec h2{font-size:1.2rem;margin:0 0 10px}
     .ag .sec p,.ag .sec li{font-size:.94rem;color:var(--muted);line-height:1.55}.ag .sec ol{padding-left:20px;margin:0}
+    .ag .sec a{color:var(--accent)}
     .ag .feat{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
     .ag .fc{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px}
     .ag .fc h3{margin:0 0 6px;font-size:.98rem}.ag .fc p{margin:0;font-size:.86rem}
@@ -283,8 +289,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     </footer>
   );
 
-  // Legal pages are public: no sign-in needed.
-  if (PUBLIC_PATHS.includes(pathname ?? "")) {
+  // Legal pages and guides are public: no sign-in needed.
+  const isPublic = PUBLIC_PATHS.includes(pathname ?? "") || (pathname ?? "").startsWith("/guides");
+  if (isPublic) {
     return (
       <div className="ag">
         <style>{styles}</style>
@@ -353,6 +360,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               <span>{userEmail}</span>
             </div>
             <Link href="/library" role="menuitem" onClick={() => setMenuOpen(false)}>My library</Link>
+            <Link href="/guides" role="menuitem" onClick={() => setMenuOpen(false)}>Research guides</Link>
             <Link href="/contact" role="menuitem" onClick={() => setMenuOpen(false)}>Help and contact</Link>
             <Link href="/privacy" role="menuitem" onClick={() => setMenuOpen(false)}>Privacy policy</Link>
             <button type="button" className="sep" role="menuitem" onClick={signOut}>Sign out</button>
