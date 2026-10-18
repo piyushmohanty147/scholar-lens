@@ -97,20 +97,26 @@ function download(name: string, text: string, mime: string) {
 export default function Library() {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [papers, setPapers] = useState<SavedPaper[]>([]);
+  const [shares, setShares] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [r, p] = await Promise.all([
+      const [r, p, s] = await Promise.all([
         supabase.from("saved_reports").select("id,project,audience,horizon,created_at,result").order("created_at", { ascending: false }).limit(50),
         supabase.from("saved_papers").select("paper_id,title,year,authors,venue,url,summary,created_at").order("created_at", { ascending: false }).limit(200),
+        supabase.from("shared_reports").select("report_id,token"),
       ]);
       if (!alive) return;
       if (r.error || p.error) setError("Could not load your library. Make sure the database setup was run, then refresh.");
       setReports((r.data as SavedReport[] | null) ?? []);
       setPapers((p.data as SavedPaper[] | null) ?? []);
+      const map: Record<string, string> = {};
+      for (const row of (s.data as { report_id: string; token: string }[] | null) ?? []) map[row.report_id] = row.token;
+      setShares(map);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -128,20 +134,51 @@ export default function Library() {
     try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
   }
 
+  async function share(id: string) {
+    setNote("");
+    let token = shares[id];
+    if (!token) {
+      if (!window.confirm("Anyone with the link can read this report, including your project description. Create a share link?")) return;
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) { setNote("Please sign in again."); return; }
+      const fresh = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+      const { error: e } = await supabase.from("shared_reports").insert({ token: fresh, report_id: id, user_id: uid });
+      if (e) { setNote("Could not create the link. Make sure the database setup was run."); return; }
+      token = fresh;
+      setShares((s) => ({ ...s, [id]: fresh }));
+    }
+    const link = `${window.location.origin}/r/${token}`;
+    try { await navigator.clipboard.writeText(link); setNote(`Link copied: ${link}`); }
+    catch { setNote(`Your link: ${link}`); }
+  }
+
+  async function unshare(id: string) {
+    const token = shares[id];
+    if (!token) return;
+    const { error: e } = await supabase.from("shared_reports").delete().eq("token", token);
+    if (!e) {
+      setShares((s) => { const c = { ...s }; delete c[id]; return c; });
+      setNote("Sharing stopped. The old link no longer works.");
+    }
+  }
+
   return (
     <main className="lb">
       <style>{`
         .lb{--bg:#fafaf7;--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;max-width:760px;margin:0 auto;padding:24px 16px 40px;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
         @media (prefers-color-scheme:dark){.lb{--bg:#12151c;--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
         .lb a{color:var(--accent)}.lb h1{font-size:1.8rem;margin:12px 0 4px}.lb h2{font-size:1.15rem;margin:28px 0 8px}
-        .lb .sub{color:var(--muted);margin:0 0 8px;font-size:.92rem}.lb .m{color:var(--muted);font-size:.82rem}
+        .lb .sub{color:var(--muted);margin:0 0 8px;font-size:.92rem}.lb .m{color:var(--muted);font-size:.82rem;word-break:break-word}
         .lb .card{margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .lb .card h3{margin:0 0 4px;font-size:1rem;line-height:1.35}
         .lb .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
         .lb button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 12px;font:inherit;font-size:.82rem;cursor:pointer}
         .lb button.main{border-color:var(--accent);color:var(--accent)}.lb button.del{color:#d92d20}
+        .lb a.btnlink{border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:.82rem;text-decoration:none}
         .lb details p{margin:8px 0 0;font-size:.9rem}.lb summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin-top:8px}
         .lb .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+        .lb .note{margin-top:12px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--card);font-size:.85rem;word-break:break-all}
       `}</style>
 
       <p><Link href="/">← Back to Scholar Lens</Link></p>
@@ -149,15 +186,17 @@ export default function Library() {
       <p className="sub">Your project outlooks and the papers you have studied are saved here automatically.</p>
       {loading && <p className="m">Loading…</p>}
       {error && <p className="m" style={{ color: "#d92d20" }}>{error}</p>}
+      {note && <div className="note">{note}</div>}
 
       <h2>Project outlooks ({reports.length})</h2>
       {!loading && reports.length === 0 && <p className="m">No saved outlooks yet. Run a Project Outlook and it will appear here.</p>}
       {reports.map((r) => {
         const rep = obj(r.result.report);
+        const token = shares[r.id];
         return (
           <div className="card" key={r.id}>
             <h3>{r.project.length > 140 ? r.project.slice(0, 140) + "…" : r.project}</h3>
-            <div className="m">{new Date(r.created_at).toLocaleDateString()}{r.horizon ? ` · ${r.horizon}-year outlook` : ""}{r.audience ? ` · ${r.audience}` : ""}</div>
+            <div className="m">{new Date(r.created_at).toLocaleDateString()}{r.horizon ? ` · ${r.horizon}-year outlook` : ""}{r.audience ? ` · ${r.audience}` : ""}{token ? " · shared" : ""}</div>
             {str(rep.summary) ? (
               <details>
                 <summary>Show summary</summary>
@@ -166,7 +205,10 @@ export default function Library() {
               </details>
             ) : null}
             <div className="acts">
-              <button className="main" onClick={() => download(`scholar-lens-outlook-${r.created_at.slice(0, 10)}.md`, reportToMarkdown(r), "text/markdown")}>Download (.md)</button>
+              <button className="main" onClick={() => share(r.id)}>{token ? "Copy share link" : "Create share link"}</button>
+              {token ? <a className="btnlink" href={`/r/${token}`} target="_blank" rel="noopener noreferrer">Open printable report</a> : null}
+              {token ? <button onClick={() => unshare(r.id)}>Stop sharing</button> : null}
+              <button onClick={() => download(`scholar-lens-outlook-${r.created_at.slice(0, 10)}.md`, reportToMarkdown(r), "text/markdown")}>Download (.md)</button>
               <button onClick={() => copy(reportToMarkdown(r))}>Copy as text</button>
               <button className="del" onClick={() => removeReport(r.id)}>Delete</button>
             </div>
