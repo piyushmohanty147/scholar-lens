@@ -73,7 +73,7 @@ async function savePaper(userId: string, requestBody: string, data: Rec) {
   } catch { /* saving is best effort */ }
 }
 
-function Landing({ box }: { box: ReactNode }) {
+function Landing({ box, subscribe }: { box: ReactNode; subscribe: ReactNode }) {
   return (
     <div className="wrap">
       <div className="tag">AI research intelligence</div>
@@ -87,7 +87,7 @@ function Landing({ box }: { box: ReactNode }) {
           <div className="fc"><h3>Find the right papers</h3><p>Ask a research question in plain language. Scholar Lens searches several scholarly sources and ranks papers by how well they answer your question.</p></div>
           <div className="fc"><h3>Deep dive on any paper</h3><p>Get a plain-language summary, study design, key findings, strengths, limitations, who cites it, related papers and a link to the free full text when one exists.</p></div>
           <div className="fc"><h3>Project Outlook</h3><p>Describe your project and get opportunities, risks, scenarios and indicators to track, grounded in research activity data and recent papers.</p></div>
-          <div className="fc"><h3>Your library</h3><p>Every outlook and paper you study is saved to your account. Export reports as documents and your papers as BibTeX citations.</p></div>
+          <div className="fc"><h3>Your library</h3><p>Every outlook and paper you study is saved to your account. Share a report with a private link, print it as a PDF, and export papers as BibTeX citations.</p></div>
         </div>
       </section>
 
@@ -108,6 +108,12 @@ function Landing({ box }: { box: ReactNode }) {
       <section className="sec">
         <h2>Free research guides</h2>
         <p>New to this? Read our short guides on <Link href="/guides/how-to-do-a-literature-review">doing a literature review</Link>, <Link href="/guides/how-to-read-a-research-paper-quickly">reading a paper quickly</Link> and <Link href="/guides/how-to-tell-if-a-research-topic-is-growing">telling whether a topic is growing</Link>.</p>
+      </section>
+
+      <section className="sec">
+        <h2>Research trends in your inbox</h2>
+        <p>Get an occasional email about which research fields are growing. Unsubscribe any time by emailing us.</p>
+        {subscribe}
       </section>
 
       <section className="sec">
@@ -135,6 +141,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [joined, setJoined] = useState(false);
   const [joinMsg, setJoinMsg] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [subEmail, setSubEmail] = useState("");
+  const [subMsg, setSubMsg] = useState("");
 
   useEffect(() => { sessionRef.current = session; }, [session]);
 
@@ -238,6 +246,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     else setJoinMsg("Could not save that right now. Please try again.");
   }
 
+  async function subscribe() {
+    const v = subEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { setSubMsg("Enter a valid email address."); return; }
+    const { error } = await supabase.from("subscribers").insert({ email: v });
+    if (!error || error.code === "23505") { setSubMsg("You are subscribed. Thank you!"); setSubEmail(""); }
+    else setSubMsg("Could not subscribe right now. Please try again.");
+  }
+
   const styles = `
     .ag{--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
     @media (prefers-color-scheme:dark){.ag{--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
@@ -261,6 +277,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .fc h3{margin:0 0 6px;font-size:.98rem}.ag .fc p{margin:0;font-size:.86rem}
     .ag details{border-bottom:1px solid var(--line);padding:10px 0}.ag summary{cursor:pointer;font-weight:600;font-size:.94rem}
     .ag details p{margin:8px 0 0}
+    .ag .subrow{display:flex;gap:8px}.ag .subrow input{margin:0}.ag .subrow .btn{width:auto;white-space:nowrap}
     .ag .foot{max-width:760px;margin:28px auto 0;padding:16px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line)}
     .ag .foot a{color:var(--muted)}
     .ag .bar{width:100%;box-sizing:border-box;padding:12px 16px 0;display:flex;justify-content:flex-end;position:relative}
@@ -289,8 +306,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     </footer>
   );
 
-  // Legal pages and guides are public: no sign-in needed.
-  const isPublic = PUBLIC_PATHS.includes(pathname ?? "") || (pathname ?? "").startsWith("/guides");
+  // Legal pages, guides and shared reports are public: no sign-in needed.
+  const path = pathname ?? "";
+  const isPublic = PUBLIC_PATHS.includes(path) || path.startsWith("/guides") || path.startsWith("/r/");
   if (isPublic) {
     return (
       <div className="ag">
@@ -301,11 +319,21 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  const subscribeBox = (
+    <>
+      <div className="subrow">
+        <input type="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="you@example.com" />
+        <button className="btn" onClick={subscribe}>Subscribe</button>
+      </div>
+      {subMsg ? <p className="msg">{subMsg}</p> : null}
+    </>
+  );
+
   if (!ready) {
     return (
       <div className="ag">
         <style>{styles}</style>
-        <Landing box={null} />
+        <Landing box={null} subscribe={null} />
         {footer}
       </div>
     );
@@ -334,7 +362,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     return (
       <div className="ag">
         <style>{styles}</style>
-        <Landing box={box} />
+        <Landing box={box} subscribe={subscribeBox} />
         {footer}
       </div>
     );
