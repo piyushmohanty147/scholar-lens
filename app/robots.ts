@@ -4,7 +4,7 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://scholar-lens-emc5.verc
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/", disallow: "/api/" },
+    rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/r/"] },
     sitemap: `${SITE}/sitemap.xml`,
   };
 }
