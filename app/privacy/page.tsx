@@ -13,6 +13,8 @@ export default function Page() {
       <ul>
         <li><strong>Account details:</strong> your email address, and your name or profile picture if you sign in with Google.</li>
         <li><strong>What you submit and save:</strong> the research questions and project descriptions you type, so we can produce results. If you are signed in, your project outlooks and the papers you open with Deep dive are saved to your account until you delete them in My library.</li>
+        <li><strong>Shared reports:</strong> if you create a share link for an outlook, anyone who has the link can read that report, including your project description, until you stop sharing it in My library. Shared reports are not listed in search engines.</li>
+        <li><strong>Newsletter:</strong> if you subscribe to research-trend emails, we keep your email address to send them. You can unsubscribe at any time by emailing us.</li>
         <li><strong>Usage counts:</strong> how many searches, deep dives and outlooks you run each day, so we can apply daily limits.</li>
         <li><strong>Payment records:</strong> if you buy a paid plan, we keep the order ID, amount, currency and status. Your card, UPI or bank details are handled by our payment provider and are never stored by us.</li>
         <li><strong>Technical data:</strong> basic request data such as IP address, which our hosting provider logs and which we use to prevent abuse.</li>
