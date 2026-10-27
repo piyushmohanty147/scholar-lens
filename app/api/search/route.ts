@@ -35,19 +35,23 @@ type RankedPaper = {
 
 const PAPER_FIELDS = "title,abstract,year,authors,url,fieldsOfStudy";
 
+// Recent identical searches are answered from memory (works while the server stays warm).
+const CACHE_MS = 15 * 60 * 1000;
+const cache = new Map<string, { at: number; papers: unknown[] }>();
+
 function searchTerms(question: string) {
   const stopWords = new Set(["a", "an", "and", "are", "do", "does", "for", "how", "in", "is", "of", "on", "the", "to", "what", "when", "with"]);
   const terms: string[] = question.toLowerCase().match(/[a-z0-9][a-z0-9-]*/g) ?? [];
   return terms.filter((term) => term.length > 2 && !stopWords.has(term)).slice(0, 12).join(" ");
 }
 
-// Fetch with a few retries when the server says "too many requests" (429).
+// Fetch with a time limit, and one quick retry when the server says "too many requests" (429).
 async function fetchWithRetry(url: URL, init: RequestInit): Promise<Response> {
-  let response = await fetch(url, init);
-  for (const waitMs of [800, 1600]) {
-    if (response.status !== 429) break;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-    response = await fetch(url, init);
+  const attempt = () => fetch(url, { ...init, signal: AbortSignal.timeout(8000) });
+  let response = await attempt();
+  if (response.status === 429) {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    response = await attempt();
   }
   return response;
 }
@@ -55,7 +59,7 @@ async function fetchWithRetry(url: URL, init: RequestInit): Promise<Response> {
 async function semanticScholarSearch(query: string, finance = false): Promise<SemanticPaper[]> {
   const url = new URL("https://api.semanticscholar.org/graph/v1/paper/search");
   url.searchParams.set("query", query);
-  url.searchParams.set("limit", "20");
+  url.searchParams.set("limit", "15");
   url.searchParams.set("fields", PAPER_FIELDS);
   if (finance) url.searchParams.set("fieldsOfStudy", "Economics,Business");
 
@@ -88,7 +92,7 @@ async function openAlexSearch(query: string, finance = false): Promise<SemanticP
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
   url.searchParams.set("filter", finance ? "has_abstract:true,primary_topic.field.id:20|14" : "has_abstract:true");
-  url.searchParams.set("per_page", "20");
+  url.searchParams.set("per_page", "15");
   url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
   url.searchParams.set("api_key", apiKey);
 
@@ -123,7 +127,7 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
   try {
     const url = new URL("https://ideas.repec.org/cgi-bin/htsearch");
     url.searchParams.set("q", query);
-    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(6000), headers: { Accept: "text/html" } });
+    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(5000), headers: { Accept: "text/html" } });
     if (!response.ok) return [];
     const html = await response.text();
     const results: SemanticPaper[] = [];
@@ -157,30 +161,44 @@ function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
   return merged;
 }
 
-// Ask Gemini for 2 extra search phrasings, so one badly worded question does not hide good papers.
-async function planQueries(question: string, fallback: string): Promise<string[]> {
+// Asks Gemini for 2 extra search phrasings, but never waits more than 4 seconds for them.
+async function planQueries(question: string): Promise<string[]> {
   try {
-    const text = await callGemini(`Write 2 short academic search queries (3 to 6 words each) that would find papers answering this question. Use different wording in each. Return JSON only: {"queries": ["...","..."]}\n\nQuestion: ${question}`, "plan the search");
-    const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { queries?: unknown };
-    const extra = (Array.isArray(parsed.queries) ? parsed.queries : []).filter((q): q is string => typeof q === "string" && q.trim().length > 2).slice(0, 2);
-    return [fallback, ...extra];
+    const call = callGemini(`Write 2 short academic search queries (3 to 6 words each) that would find papers answering this question. Use different wording in each. Return JSON only: {"queries": ["...","..."]}\n\nQuestion: ${question}`, "plan the search").then((text) => {
+      const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { queries?: unknown };
+      return (Array.isArray(parsed.queries) ? parsed.queries : []).filter((q): q is string => typeof q === "string" && q.trim().length > 2).slice(0, 2);
+    });
+    const timeout = new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 4000));
+    return await Promise.race([call, timeout]);
   } catch {
-    return [fallback];
+    return [];
   }
 }
 
-// Ask every source at once and mix the results. A failing source never breaks the search.
+// Asks every source at once and mixes the results. A failing source never breaks the search.
 async function findCandidates(question: string, query: string, finance: boolean): Promise<SemanticPaper[]> {
-  const queries = await planQueries(question, query);
+  const hasOpenAlex = Boolean(process.env.OPENALEX_API_KEY);
   const jobs: Promise<SemanticPaper[]>[] = [];
-  if (process.env.OPENALEX_API_KEY) for (const q of queries) jobs.push(openAlexSearch(q, finance));
-  jobs.push(semanticScholarSearch(queries[0], finance));
-  if (finance) jobs.push(repecSearch(queries[0]));
+  if (hasOpenAlex) jobs.push(openAlexSearch(query, finance));
+  jobs.push(semanticScholarSearch(query, finance));
+  if (finance) jobs.push(repecSearch(query));
+  const baseCount = jobs.length;
+
+  // The extra phrasings are planned and searched alongside the main searches.
+  if (hasOpenAlex) {
+    jobs.push((async () => {
+      const extra = await planQueries(question);
+      const lists = await Promise.allSettled(extra.map((q) => openAlexSearch(q, finance)));
+      return lists.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+    })());
+  }
+
   const settled = await Promise.allSettled(jobs);
-  if (settled.every((r) => r.status === "rejected")) {
+  const merged = mergeUnique(settled.map((r) => (r.status === "fulfilled" ? r.value : [])));
+  if (settled.slice(0, baseCount).every((r) => r.status === "rejected") && merged.length === 0) {
     throw new Error("Could not retrieve papers right now. Please try again in a moment.");
   }
-  return mergeUnique(settled.map((r) => (r.status === "fulfilled" ? r.value : [])));
+  return merged;
 }
 
 function extractJson(text: string) {
@@ -196,7 +214,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[], finance
     id: paper.paperId,
     index: index + 1,
     title: paper.title,
-    abstract: (paper.abstract ?? "No abstract available.").slice(0, 600),
+    abstract: (paper.abstract ?? "No abstract available.").slice(0, 350),
   }));
   const prompt = `You rank research papers for a user's actual research question. Score relevance from 0 to 10 based strictly on how well each candidate answers the question, not merely keyword overlap. Return a JSON array only. Each item must be {"id": string, "score": number, "explanation": string}. Include every candidate exactly once. Scores must be integers. For score 6 or higher, explanation must be one concise sentence explaining why it matches. For scores below 6, use an empty explanation.${finance ? " This is a finance and economics search. Treat terms like alpha, beta, herding, ESG, yield curve and market efficiency as finance terms, not general-science terms, and prefer empirical finance and economics papers (data-based studies) over purely theoretical or unrelated ones." : ""}\n\nQuestion: ${question}\n\nCandidates:\n${JSON.stringify(candidateText)}`;
   const text = await callGemini(prompt, "evaluate paper relevance");
@@ -226,8 +244,12 @@ export async function POST(request: Request) {
     if (!question) return NextResponse.json({ error: "A research question is required." }, { status: 400 });
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
 
+    const cacheKey = `${finance ? "f" : "a"}|${question.toLowerCase()}`;
+    const hit = cache.get(cacheKey);
+    if (hit && Date.now() - hit.at < CACHE_MS) return NextResponse.json({ papers: hit.papers });
+
     const query = searchTerms(question) || question;
-    const candidates = (await findCandidates(question, query, finance)).slice(0, 30);
+    const candidates = (await findCandidates(question, query, finance)).slice(0, 20);
     if (!candidates.length) return NextResponse.json({ papers: [] });
 
     // If ranking fails, still show the results instead of an error.
@@ -245,6 +267,11 @@ export async function POST(request: Request) {
         score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
       };
     }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
+
+    if (ranked) {
+      if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
+      cache.set(cacheKey, { at: Date.now(), papers });
+    }
     return NextResponse.json({ papers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to search for papers.";
