@@ -2,14 +2,14 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  background: #fafaf7;
-  color: #1d2433;
+  background: #faf8f4;
+  color: #1f1d1a;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 @media (prefers-color-scheme: dark) {
-  body { background: #12151c; color: #eef1f7; }
+  body { background: #0f1112; color: #ecebe8; }
 }
 h1, h2 {
   font-family: Georgia, "Times New Roman", serif;
