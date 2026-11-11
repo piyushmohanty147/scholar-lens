@@ -41,7 +41,7 @@ function Chart({ counts, projection }: { counts: Point[]; projection: Proj[] | n
     <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="Papers published per year, with a rough projection">
       {counts.map((c, i) => (
         <g key={c.year}>
-          <rect x={i * bw + 2} y={y(c.count)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(c.count))} rx={2} fill="var(--link)" />
+          <rect x={i * bw + 2} y={y(c.count)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(c.count))} rx={2} fill="var(--data)" />
           <text x={i * bw + bw / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--muted)">{`'${String(c.year).slice(2)}`}</text>
         </g>
       ))}

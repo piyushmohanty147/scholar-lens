@@ -1,24 +1,25 @@
 /* Scholar Lens design system. Every page reads its colours and fonts from these tokens.
-   Colour has a fixed meaning: periwinkle = what happened (data, links), gold = what is forecast
-   or can be acted on (primary buttons, projections). Change a value here and the whole site follows. */
+   Matte black and graphite grey. Off-white is the one "action" colour (main buttons, forecasts);
+   mid-grey is data that already happened. Change a value here and the whole site follows. */
 :root {
   color-scheme: dark;
 
-  --bg: #0b1130;
-  --band: #0f1840;
-  --card: #131d47;
-  --card-2: #1a2658;
-  --line: #2a3768;
+  --bg: #0d0d0f;
+  --band: #121214;
+  --card: #17171a;
+  --card-2: #202024;
+  --line: #2d2d33;
 
-  --text: #eef1fb;
-  --muted: #a9b4da;
-  --placeholder: #8591bf;
+  --text: #f2f2ef;
+  --muted: #a3a3ab;
+  --placeholder: #8a8a93;
 
-  --accent: #f3b843;
-  --accent-ink: #1a1303;
-  --accent-soft: rgba(243, 184, 67, 0.14);
-  --link: #9db9ff;
-  --link-soft: rgba(157, 185, 255, 0.14);
+  --accent: #f2f2ef;
+  --accent-ink: #0d0d0f;
+  --accent-soft: rgba(255, 255, 255, 0.07);
+  --link: #d6d6dc;
+  --link-soft: rgba(255, 255, 255, 0.08);
+  --data: #8d8d96;
   --danger: #ff9a8f;
   --ok: #7be0b5;
 
@@ -27,7 +28,7 @@
 
   --wrap: 1120px;
   --radius: 14px;
-  --shadow: 0 24px 60px rgba(3, 6, 20, 0.55);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
 *, *::before, *::after { box-sizing: border-box; }

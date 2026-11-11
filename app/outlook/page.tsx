@@ -133,7 +133,7 @@ export default function Outlook() {
         .ol .bottom{margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);border-radius:6px;font-weight:600}
         .ol .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
         .ol .bars{display:flex;align-items:flex-end;gap:4px;height:60px;margin:6px 0}
-        .ol .bar{flex:1;background:var(--link);border-radius:3px 3px 0 0;min-height:2px}
+        .ol .bar{flex:1;background:var(--data);border-radius:3px 3px 0 0;min-height:2px}
         .ol .yrs{display:flex;gap:4px;font-size:.65rem;color:var(--muted)}.ol .yrs span{flex:1;text-align:center}
         .ol .ghost{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer;margin-top:16px}
         .ol .hist{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:8px 0;font:inherit;font-size:.88rem;cursor:pointer}

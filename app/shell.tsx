@@ -54,10 +54,10 @@ export default function Shell() {
         .sx .sxprev{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:var(--shadow)}
         .sx .sxprev .lab{font-size:.8rem;color:var(--muted)}
         .sx .sxprev h3{margin:8px 0 12px;font-family:var(--font-display);font-weight:600;font-size:1.2rem;line-height:1.3;letter-spacing:-.01em}
-        .sx .sxprev .sig{display:inline-block;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(243,184,67,.4);border-radius:999px;font-size:.78rem;font-weight:600;padding:3px 12px}
+        .sx .sxprev .sig{display:inline-block;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(255,255,255,.28);border-radius:999px;font-size:.78rem;font-weight:600;padding:3px 12px}
         .sx .sxprev .bars{display:flex;align-items:flex-end;gap:7px;height:96px;margin:20px 0 6px}
-        .sx .sxprev .bar{flex:1;border-radius:4px 4px 0 0;background:var(--link)}
-        .sx .sxprev .bar:nth-last-child(-n+3){background:rgba(243,184,67,.1);outline:1.5px dashed var(--accent);outline-offset:-1.5px}
+        .sx .sxprev .bar{flex:1;border-radius:4px 4px 0 0;background:var(--data)}
+        .sx .sxprev .bar:nth-last-child(-n+3){background:rgba(255,255,255,.08);outline:1.5px dashed var(--accent);outline-offset:-1.5px}
         .sx .sxprev .yrs{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:14px}
         .sx .sxprev ul{margin:0;padding-left:18px}.sx .sxprev li{font-size:.9rem;line-height:1.5;margin-bottom:8px;color:var(--text)}
         .sx .sxprev .tg{display:inline-block;font-size:.7rem;padding:1px 9px;border-radius:999px;background:var(--link-soft);color:var(--link);margin-left:4px;white-space:nowrap}
@@ -82,7 +82,7 @@ export default function Shell() {
         .sx .sxfc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;display:block}
         .sx .sxfc:hover{border-color:var(--link)}
         .sx .sxfc h3{margin:0 0 8px;font-size:1.08rem}.sx .sxfc p{margin:0;color:var(--muted);font-size:.94rem;line-height:1.6}
-        .sx .sxfc.link{border-color:rgba(243,184,67,.45)}.sx .sxfc .go{display:inline-block;margin-top:14px;font-weight:600;font-size:.92rem;color:var(--accent)}
+        .sx .sxfc.link{border-color:rgba(255,255,255,.3)}.sx .sxfc .go{display:inline-block;margin-top:14px;font-weight:600;font-size:.92rem;color:var(--accent)}
         .sx .sxsteps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px}
         .sx .sxnum{font-family:var(--font-display);font-size:2.8rem;line-height:1;color:var(--accent);margin-bottom:10px}
         .sx .sxstep h3{margin:0 0 6px;font-size:1.08rem}.sx .sxstep p{margin:0;color:var(--muted);font-size:.95rem;line-height:1.6}

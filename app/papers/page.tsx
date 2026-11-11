@@ -217,7 +217,7 @@ export default function Home() {
         .sl .panel p{margin:0 0 8px}.sl .panel ul{margin:0;padding-left:20px}.sl .panel li{margin-bottom:6px}
         .sl .sec{margin-top:14px}.sl .sec h4{margin:0 0 4px;font-size:.88rem;color:var(--accent)}
         .sl .bars{display:flex;align-items:flex-end;gap:4px;height:50px;margin:6px 0}
-        .sl .bar{flex:1;background:var(--link);border-radius:3px 3px 0 0;min-height:2px}
+        .sl .bar{flex:1;background:var(--data);border-radius:3px 3px 0 0;min-height:2px}
         .sl .yrs{display:flex;gap:4px;font-size:.65rem;color:var(--muted)}.sl .yrs span{flex:1;text-align:center}
         .sl .top{display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:8px}
         .sl select{padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-size:.85rem}
