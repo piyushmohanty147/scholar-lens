@@ -113,7 +113,7 @@ export default function TrendExplorer() {
         .tr .msg{margin-top:22px;color:var(--muted)}.tr .err{color:var(--danger)}
         .tr .verdict{margin-top:22px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;background:var(--card);font-weight:600}
         .tr .grid{display:grid;gap:16px;margin-top:16px;grid-template-columns:1fr}
-        .tr .card{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:none}
+        .tr .card{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--edge)}
         .tr .card h2{margin:0 0 8px;font-size:1.15rem;}
         .tr .stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
         .tr .pill{display:inline-block;font-size:.76rem;padding:3px 11px;border-radius:999px;background:var(--line);color:var(--text)}
