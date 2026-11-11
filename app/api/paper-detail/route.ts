@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { callGemini } from "../../../lib/gemini";
 import { allow } from "../../../lib/rateLimit";
+import { recordUsage, saveRow } from "../../../lib/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -99,6 +100,18 @@ export async function POST(request: Request) {
     const prompt = `You are a careful research analyst explaining a paper to someone who needs to deeply understand it without reading it. Use ONLY the title, abstract and metadata below. Never invent numbers, sample sizes or results. If something is not in the abstract, write "Not stated in the abstract". Mark anything you infer with "(inferred)".\n\n${question ? `The reader's question: ${question}\n\n` : ""}Title: ${title}\nAbstract: ${abstract || "Not available."}\nMetadata: ${JSON.stringify({ year: meta.year, type: meta.type, venue: meta.venue, citations: meta.citations, topics: meta.topics, keywords: meta.keywords })}\n\nReturn JSON with exactly this shape:\n{"plainSummary": string (5-7 sentences, plain language), "background": string, "researchQuestion": string, "studyDesign": {"type": string, "sample": string, "methods": string}, "keyFindings": [string], "numbers": [string] (exact figures that appear in the abstract; empty if none), "whyItMatters": string, "howItAnswersYourQuestion": string, "strengths": [string], "limitations": [string], "whoShouldRead": string, "concepts": [{"term": string, "meaning": string}], "questionsToAsk": [string], "reliability": {"level": "high"|"medium"|"low"|"unclear", "reason": string}}\nGive 4-8 keyFindings, 2-4 strengths, 3-5 limitations, 3-6 concepts and 3-5 questionsToAsk.`;
     const analysis = parseObject(await callGemini(prompt, "analyse the paper"));
 
+    // Only a finished deep dive is saved to the library and counted, so errors never cost the user a use.
+    const oaLink = meta.openAccess.url ?? (paperId.startsWith("http") ? paperId : null);
+    await Promise.allSettled([
+      paperId
+        ? saveRow(request, "saved_papers", {
+            paper_id: paperId, title, year: meta.year,
+            authors: meta.authors.map((a) => a.name), venue: meta.venue || null,
+            url: oaLink, summary: str(analysis.plainSummary) || null,
+          }, "user_id,paper_id")
+        : Promise.resolve(),
+      recordUsage(request, "detail"),
+    ]);
     return NextResponse.json({ analysis, meta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to analyse this paper.";

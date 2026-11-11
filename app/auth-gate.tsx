@@ -34,44 +34,7 @@ function resetInfo(now: number) {
 }
 
 const str = (x: unknown) => (typeof x === "string" ? x : "");
-const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
 const obj = (x: unknown): Rec => (x && typeof x === "object" ? (x as Rec) : {});
-
-// Saves every finished outlook to the signed-in user's library.
-async function saveReport(userId: string, requestBody: string, data: Rec) {
-  try {
-    const body = JSON.parse(requestBody) as Rec;
-    const project = str(body.project).trim();
-    if (!project || !data.report) return;
-    await supabase.from("saved_reports").insert({
-      user_id: userId, project, audience: str(body.audience), horizon: str(body.horizon), result: data,
-    });
-  } catch { /* saving is best effort */ }
-}
-
-// Saves every paper the user opens with Deep dive.
-async function savePaper(userId: string, requestBody: string, data: Rec) {
-  try {
-    const body = JSON.parse(requestBody) as Rec;
-    const paperId = str(body.paperId);
-    const title = str(body.title).trim();
-    if (!paperId || !title) return;
-    const meta = obj(data.meta);
-    const analysis = obj(data.analysis);
-    const authors = arr(meta.authors).map((a) => str(obj(a).name)).filter(Boolean);
-    const oa = obj(meta.openAccess);
-    const link = str(oa.url) || (paperId.startsWith("http") ? paperId : "");
-    await supabase.from("saved_papers").upsert(
-      {
-        user_id: userId, paper_id: paperId, title,
-        year: typeof meta.year === "number" ? meta.year : null,
-        authors, venue: str(meta.venue) || null, url: link || null,
-        summary: str(analysis.plainSummary) || null,
-      },
-      { onConflict: "user_id,paper_id" },
-    );
-  } catch { /* saving is best effort */ }
-}
 
 function Landing({ box, subscribe }: { box: ReactNode; subscribe: ReactNode }) {
   return (
@@ -180,24 +143,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     };
   }, [menuOpen]);
 
-  // Watches replies from our own API: shows the limit window and saves finished results to the library.
+  // Watches replies from our own API and shows the limit window when a daily limit is reached.
+  // (Saving to the library now happens on the server, inside the API routes.)
   useEffect(() => {
     const original = window.fetch;
     window.fetch = async (...args: Parameters<typeof fetch>) => {
       const res = await original(...args);
-      try {
-        const [input, init] = args;
-        const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
-        const body = init?.body;
-        const userId = sessionRef.current?.user.id;
-        if (res.ok && userId && init?.method === "POST" && typeof body === "string") {
-          if (url.includes("/api/outlook")) {
-            res.clone().json().then((d) => saveReport(userId, body, obj(d))).catch(() => {});
-          } else if (url.includes("/api/paper-detail")) {
-            res.clone().json().then((d) => savePaper(userId, body, obj(d))).catch(() => {});
-          }
-        }
-      } catch { /* never block the real request */ }
       if (res.status === 429) {
         try {
           const data = (await res.clone().json()) as { code?: string; error?: string; kind?: string; plan?: string };

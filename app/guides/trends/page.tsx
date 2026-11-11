@@ -4,11 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 
 type Point = { year: number; count: number };
-type Proj = { year: number; mid: number; low: number; high: number };
+type Proj = { year: number; mid: number; low: number; high: number; basis?: string };
+type Backtest = { horizons: { h: number; n: number; rmse: number; medianPctError: number; naiveMedianPctError: number }[]; summary: string | null };
 type Stats = { rawGrowthPct: number | null; relativeGrowthPct: number | null; signal: string };
 type Sub = { name: string; recent: number; prior: number; shareChangePct: number | null };
 type Topic = {
-  query: string; counts: Point[]; totalPapers: number; stats: Stats; projection: Proj[] | null;
+  query: string; counts: Point[]; totalPapers: number; stats: Stats; projection: Proj[] | null; backtest?: Backtest;
   subtopics: Sub[]; countries: { name: string; count: number }[];
 };
 type Result = { lastYear: number; topics: Topic[] };
@@ -117,6 +118,7 @@ export default function TrendExplorer() {
         .tr .pill{display:inline-block;font-size:.76rem;padding:3px 11px;border-radius:999px;background:var(--line);color:var(--text)}
         .tr .pill.big{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;font-weight:600}
         .tr .chart{width:100%;height:auto;margin-top:6px}
+        .tr .track{margin:10px 0;padding:10px 12px;border-left:3px solid var(--accent2);background:var(--bg,transparent);border-radius:6px;font-size:.86rem}
         .tr .m{color:var(--muted);font-size:.82rem}
         .tr h3{font-size:.9rem;margin:16px 0 6px}
         .tr ul{margin:0;padding-left:18px}.tr li{font-size:.88rem;margin-bottom:5px}
@@ -157,7 +159,16 @@ export default function TrendExplorer() {
                   <span className="pill">{t.totalPapers.toLocaleString()} papers since {result.lastYear - 11}</span>
                 </div>
                 <Chart counts={t.counts} projection={t.projection} />
-                <p className="m">Solid bars: papers per year. Faded bars with a line: a simple projection and rough range if the last six years&apos; trend continues. It is not a prediction.</p>
+                <p className="m">Solid bars: papers per year. Faded bars with a line: a simple projection and range if the last six years&apos; trend continues. It is not a prediction.</p>
+                {t.backtest?.summary ? (
+                  <div className="track">
+                    <strong>Track record</strong>
+                    <div>{t.backtest.summary}</div>
+                    <div className="m">The range above is sized from these real past misses, not guessed. Few past years exist, so treat it as rough.</div>
+                  </div>
+                ) : (
+                  <p className="m">Not enough history for this topic to test the forecast against its own past, so the range is a rougher estimate.</p>
+                )}
 
                 <div className="two">
                   <div>
