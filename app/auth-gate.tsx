@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { SiteHeader } from "./site-header";
 import { usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "../lib/supabase";
@@ -38,9 +39,10 @@ const obj = (x: unknown): Rec => (x && typeof x === "object" ? (x as Rec) : {});
 
 function Landing({ box, subscribe }: { box: ReactNode; subscribe: ReactNode }) {
   return (
+    <>
+    <SiteHeader />
     <div className="wrap">
-      <div className="tag">AI research intelligence</div>
-      <h1>Scholar Lens</h1>
+      <h1>See what research says, and what it means for what happens next</h1>
       <p className="sub">Find the papers that truly answer your question, understand them in depth, and get an evidence-based outlook for your project.</p>
       {box}
 
@@ -87,6 +89,7 @@ function Landing({ box, subscribe }: { box: ReactNode; subscribe: ReactNode }) {
         <details><summary>Is the outlook financial or professional advice?</summary><p>No. Outlooks show what published research suggests. Research activity is not the same as real-world or market outcomes.</p></details>
       </section>
     </div>
+    </>
   );
 }
 
@@ -206,25 +209,23 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   const styles = `
-    .ag{--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
-    @media (prefers-color-scheme:dark){.ag{--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
-    body{background:#fafaf7}@media (prefers-color-scheme:dark){body{background:#12151c}}
-    .ag .wrap{max-width:640px;margin:0 auto;padding:56px 16px 24px;text-align:center}
-    .ag h1{font-size:2rem;margin:4px 0}.ag .tag{color:var(--accent);font-size:.8rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
-    .ag .sub{color:var(--muted);margin:8px 0 24px}
-    .ag .box{max-width:460px;margin:0 auto;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:left}
-    .ag .btn{display:block;width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:12px;font:inherit;font-weight:600;cursor:pointer}
-    .ag .btn.main{background:var(--accent);border-color:var(--accent);color:#fff}
-    .ag .btn:disabled{opacity:.6;cursor:default}
+    .ag{color:var(--text)}
+    .ag .wrap{max-width:680px;margin:0 auto;padding:36px 20px 24px;text-align:center}
+    .ag h1{font-size:clamp(2rem,5.5vw,3.1rem);margin:8px 0 14px;line-height:1.08;letter-spacing:-.03em}
+    .ag .sub{color:var(--muted);margin:8px auto 30px;max-width:540px;font-size:1.08rem}
+    .ag .box{max-width:460px;margin:0 auto;padding:24px;border:1px solid var(--line);border-radius:20px;background:var(--card);text-align:left;box-shadow:var(--shadow)}
+    .ag .btn{display:block;width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:13px;font:inherit;font-weight:600;cursor:pointer}
+    .ag .btn.main{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+    .ag .btn:hover:not(:disabled){background:var(--card-2)}.ag .btn.main:hover:not(:disabled){background:var(--accent);filter:brightness(1.07)}.ag .btn:disabled{opacity:.6;cursor:default}
     .ag input{width:100%;box-sizing:border-box;margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit}
     .ag .or{text-align:center;color:var(--muted);font-size:.8rem;margin:14px 0 2px}
     .ag .msg{margin:12px 0 0;font-size:.88rem;color:var(--muted)}
     .ag .small{margin-top:14px;font-size:.78rem;color:var(--muted);text-align:center}
     .ag .sec{margin-top:40px;text-align:left}.ag .sec h2{font-size:1.2rem;margin:0 0 10px}
     .ag .sec p,.ag .sec li{font-size:.94rem;color:var(--muted);line-height:1.55}.ag .sec ol{padding-left:20px;margin:0}
-    .ag .sec a{color:var(--accent)}
+    .ag .sec a{color:var(--link)}
     .ag .feat{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-    .ag .fc{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px}
+    .ag .fc{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:18px}
     .ag .fc h3{margin:0 0 6px;font-size:.98rem}.ag .fc p{margin:0;font-size:.86rem}
     .ag details{border-bottom:1px solid var(--line);padding:10px 0}.ag summary{cursor:pointer;font-weight:600;font-size:.94rem}
     .ag details p{margin:8px 0 0}
@@ -232,7 +233,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .foot{max-width:760px;margin:28px auto 0;padding:16px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line)}
     .ag .foot a{color:var(--muted)}
     .ag .bar{width:100%;box-sizing:border-box;padding:12px 16px 0;display:flex;justify-content:flex-end;position:relative}
-    .ag .avatar{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:linear-gradient(135deg,#5b7cff,#a37bff);color:#fff;font:inherit;font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+    .ag .avatar{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
     .ag .avatar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     .ag .menu{position:absolute;right:16px;top:58px;z-index:40;width:250px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.35);overflow:hidden}
     .ag .menu .who{padding:14px 16px;border-bottom:1px solid var(--line)}

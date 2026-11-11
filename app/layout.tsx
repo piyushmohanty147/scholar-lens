@@ -1,6 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import AuthGate from "./auth-gate";
+
+// Display serif for headlines and numbers, clean sans for everything else.
+const display = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
+const body = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://scholar-lens-emc5.vercel.app";
 
@@ -16,12 +21,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#2f5bea",
+  themeColor: "#0b1130",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
         <AuthGate>{children}</AuthGate>
       </body>

@@ -112,21 +112,20 @@ export default function Outlook() {
   return (
     <main className="ol">
       <style>{`
-        .ol{--bg:#fafaf7;--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;max-width:760px;margin:0 auto;padding:32px 16px 64px;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-        @media (prefers-color-scheme:dark){.ol{--bg:#12151c;--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
+        .ol{max-width:760px;margin:0 auto;padding:32px 16px 64px;color:var(--text);}
         .ol h1{font-size:2rem;margin:4px 0}.ol h2{font-size:1.1rem;margin:0 0 8px}
-        .ol .tag{color:var(--accent);font-size:.8rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
-        .ol .sub{color:var(--muted);margin:0 0 20px}.ol a{color:var(--accent)}
+        .ol .tag{color:var(--accent);font-size:.8rem;font-weight:600;}
+        .ol .sub{color:var(--muted);margin:0 0 20px}.ol a{color:var(--link)}
         .ol textarea{width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit;min-height:120px;resize:vertical}
         .ol select{padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit}
         .ol .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
-        .ol .go{margin-left:auto;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer}
+        .ol .go{margin-left:auto;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer}
         .ol .go:disabled{opacity:.5;cursor:default}
         .ol .aud{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
         .ol .aud button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;padding:7px 14px;font:inherit;font-size:.85rem;cursor:pointer}
-        .ol .aud button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+        .ol .aud button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
         .ol .ex{display:block;margin-top:8px;border:1px dashed var(--line);background:none;color:var(--muted);border-radius:10px;padding:8px 12px;font:inherit;font-size:.82rem;cursor:pointer;text-align:left}
-        .ol .msg{margin-top:24px;color:var(--muted)}.ol .err{color:#d92d20}
+        .ol .msg{margin-top:24px;color:var(--muted)}.ol .err{color:var(--danger)}
         .ol .box{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .ol ul{margin:0;padding-left:20px}.ol li{margin-bottom:10px}.ol .m{color:var(--muted);font-size:.85rem}
         .ol .str{display:inline-block;font-size:.7rem;padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
@@ -134,7 +133,7 @@ export default function Outlook() {
         .ol .bottom{margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);border-radius:6px;font-weight:600}
         .ol .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
         .ol .bars{display:flex;align-items:flex-end;gap:4px;height:60px;margin:6px 0}
-        .ol .bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+        .ol .bar{flex:1;background:var(--link);border-radius:3px 3px 0 0;min-height:2px}
         .ol .yrs{display:flex;gap:4px;font-size:.65rem;color:var(--muted)}.ol .yrs span{flex:1;text-align:center}
         .ol .ghost{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer;margin-top:16px}
         .ol .hist{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:8px 0;font:inherit;font-size:.88rem;cursor:pointer}

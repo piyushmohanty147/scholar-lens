@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SiteHeader } from "../../site-header";
 
 type Point = { year: number; count: number };
 type Proj = { year: number; mid: number; low: number; high: number; basis?: string };
@@ -40,7 +41,7 @@ function Chart({ counts, projection }: { counts: Point[]; projection: Proj[] | n
     <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="Papers published per year, with a rough projection">
       {counts.map((c, i) => (
         <g key={c.year}>
-          <rect x={i * bw + 2} y={y(c.count)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(c.count))} rx={2} fill="var(--accent)" />
+          <rect x={i * bw + 2} y={y(c.count)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(c.count))} rx={2} fill="var(--link)" />
           <text x={i * bw + bw / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--muted)">{`'${String(c.year).slice(2)}`}</text>
         </g>
       ))}
@@ -49,8 +50,8 @@ function Chart({ counts, projection }: { counts: Point[]; projection: Proj[] | n
         const cx = i * bw + bw / 2;
         return (
           <g key={p.year}>
-            <rect x={i * bw + 2} y={y(p.mid)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(p.mid))} rx={2} fill="var(--accent)" fillOpacity={0.3} stroke="var(--accent)" strokeDasharray="3 3" />
-            <line x1={cx} x2={cx} y1={y(p.high)} y2={y(p.low)} stroke="var(--text)" strokeWidth={1.5} />
+            <rect x={i * bw + 2} y={y(p.mid)} width={Math.max(2, bw - 4)} height={Math.max(1, H - padB - y(p.mid))} rx={2} fill="var(--accent)" fillOpacity={0.12} stroke="var(--accent)" strokeWidth={1.5} strokeDasharray="3 3" />
+            <line x1={cx} x2={cx} y1={y(p.high)} y2={y(p.low)} stroke="var(--accent)" strokeWidth={1.6} />
             <text x={cx} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--muted)">{`~${String(p.year).slice(2)}`}</text>
           </g>
         );
@@ -91,44 +92,43 @@ export default function TrendExplorer() {
   const two = result && result.topics.length === 2;
 
   return (
+    <>
+    <SiteHeader />
     <main className="tr">
       <style>{`
-        .tr{--text:#1d2433;--muted:#667085;--line:#e4e7ec;--card:#fff;--accent:#2f5bea;--accent2:#8b5cf6;max-width:880px;margin:0 auto;padding:36px 16px 40px;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.55}
-        @media (prefers-color-scheme:dark){.tr{--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--card:#1b2030;--accent:#7b9bff;--accent2:#b08cff}}
-        .tr a{color:var(--accent)}
-        .tr .kicker{color:var(--accent);font-size:.8rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
-        .tr h1{font-size:clamp(1.9rem,5vw,2.8rem);line-height:1.15;margin:8px 0 10px;font-family:Georgia,'Times New Roman',serif;font-weight:600}
-        .tr h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+        .tr{--accent2:var(--link);max-width:880px;margin:0 auto;padding:24px 20px 56px;color:var(--text);line-height:1.55}
+        .tr a{color:var(--link)}
+        .tr .kicker{color:var(--accent);font-size:.8rem;font-weight:600;}
+        .tr h1{font-size:clamp(2.1rem,5.5vw,3.2rem);line-height:1.08;margin:8px 0 12px;letter-spacing:-.03em}
         .tr .lead{color:var(--muted);font-size:1.05rem;max-width:640px;margin:0 0 22px}
         .tr .form{display:grid;gap:10px;grid-template-columns:1fr 1fr auto;align-items:end}
         @media (max-width:640px){.tr .form{grid-template-columns:1fr}}
         .tr label{font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
         .tr input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);font:inherit}
         .tr input:focus{outline:2px solid var(--accent);outline-offset:1px}
-        .tr .go{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;border:0;border-radius:12px;padding:12px 22px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+        .tr .go{background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:12px 22px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
         .tr .go:disabled{opacity:.5;cursor:default}
         .tr .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
         .tr .chip{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer}
-        .tr .msg{margin-top:22px;color:var(--muted)}.tr .err{color:#d92d20}
+        .tr .msg{margin-top:22px;color:var(--muted)}.tr .err{color:var(--danger)}
         .tr .verdict{margin-top:22px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;background:var(--card);font-weight:600}
         .tr .grid{display:grid;gap:16px;margin-top:16px;grid-template-columns:1fr}
-        .tr .card{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:0 10px 30px rgba(20,30,70,.06)}
-        .tr .card h2{margin:0 0 8px;font-size:1.15rem;font-family:Georgia,'Times New Roman',serif}
+        .tr .card{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:none}
+        .tr .card h2{margin:0 0 8px;font-size:1.15rem;}
         .tr .stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
         .tr .pill{display:inline-block;font-size:.76rem;padding:3px 11px;border-radius:999px;background:var(--line);color:var(--text)}
-        .tr .pill.big{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;font-weight:600}
+        .tr .pill.big{background:var(--accent);color:var(--accent-ink);font-weight:600}
         .tr .chart{width:100%;height:auto;margin-top:6px}
         .tr .track{margin:10px 0;padding:10px 12px;border-left:3px solid var(--accent2);background:var(--bg,transparent);border-radius:6px;font-size:.86rem}
         .tr .m{color:var(--muted);font-size:.82rem}
         .tr h3{font-size:.9rem;margin:16px 0 6px}
         .tr ul{margin:0;padding-left:18px}.tr li{font-size:.88rem;margin-bottom:5px}
         .tr .two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-        .tr .cta{margin-top:26px;padding:18px;border-radius:16px;background:linear-gradient(135deg,rgba(47,91,234,.12),rgba(139,92,246,.12));border:1px solid var(--line)}
-        .tr .cta a.btn{display:inline-block;margin-top:8px;background:var(--accent);color:#fff;border-radius:10px;padding:10px 18px;text-decoration:none;font-weight:600}
+        .tr .cta{margin-top:30px;padding:22px;border-radius:16px;background:var(--card-2);border:1px solid var(--line)}
+        .tr .cta a.btn{display:inline-block;margin-top:8px;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:10px 18px;text-decoration:none;font-weight:600}
       `}</style>
 
-      <div className="kicker">Free tool</div>
-      <h1>See which research topics are <span>really growing</span></h1>
+            <h1>See which research topics are <span>really growing</span></h1>
       <p className="lead">Compare two topics side by side. We count papers per year, correct for the overall rise in publishing, and show fast-growing subtopics, leading countries and a simple 3-year projection.</p>
 
       <div className="form">
@@ -193,5 +193,6 @@ export default function TrendExplorer() {
       )}
       <p className="m" style={{ marginTop: 24 }}><Link href="/guides">← All guides</Link></p>
     </main>
+    </>
   );
 }
