@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { callGemini } from "../../../lib/gemini";
 import { allow } from "../../../lib/rateLimit";
+import { recordUsage } from "../../../lib/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -246,11 +247,17 @@ export async function POST(request: Request) {
 
     const cacheKey = `${finance ? "f" : "a"}|${question.toLowerCase()}`;
     const hit = cache.get(cacheKey);
-    if (hit && Date.now() - hit.at < CACHE_MS) return NextResponse.json({ papers: hit.papers });
+    if (hit && Date.now() - hit.at < CACHE_MS) {
+      await recordUsage(request, "search");
+      return NextResponse.json({ papers: hit.papers });
+    }
 
     const query = searchTerms(question) || question;
     const candidates = (await findCandidates(question, query, finance)).slice(0, 20);
-    if (!candidates.length) return NextResponse.json({ papers: [] });
+    if (!candidates.length) {
+      await recordUsage(request, "search");
+      return NextResponse.json({ papers: [] });
+    }
 
     // If ranking fails, still show the results instead of an error.
     let rankings: RankedPaper[] = [];
@@ -272,6 +279,8 @@ export async function POST(request: Request) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
       cache.set(cacheKey, { at: Date.now(), papers });
     }
+    // Only a finished search is counted, so errors never cost the user a use.
+    await recordUsage(request, "search");
     return NextResponse.json({ papers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to search for papers.";

@@ -7,12 +7,18 @@ export const maxDuration = 30;
 type Rec = Record<string, unknown>;
 type Point = { year: number; count: number };
 type Group = { key: string; name: string; count: number };
+type Fit = { slope: number; intercept: number };
+type Horizon = { h: number; n: number; rmse: number; medianPctError: number; naiveMedianPctError: number };
 
 const LAST_YEAR = new Date().getFullYear() - 1; // last full year
 const FIRST_YEAR = LAST_YEAR - 11;
 const RANGE = `from_publication_date:${FIRST_YEAR}-01-01,to_publication_date:${LAST_YEAR}-12-31`;
 const RECENT = `from_publication_date:${LAST_YEAR - 2}-01-01,to_publication_date:${LAST_YEAR}-12-31`;
 const PRIOR = `from_publication_date:${LAST_YEAR - 5}-01-01,to_publication_date:${LAST_YEAR - 3}-12-31`;
+
+const WINDOW = 6; // the forecast learns from the last 6 years
+const MAX_H = 3; // and looks up to 3 years ahead
+const MIN_TESTS = 3; // fewer past tests than this and we do not trust the measured error
 
 async function openAlex(params: Record<string, string>, revalidate: number): Promise<Rec | null> {
   const key = process.env.OPENALEX_API_KEY;
@@ -40,6 +46,12 @@ async function groupBy(query: string | null, field: string, filter: string, reva
 }
 
 const avg = (a: number[]) => a.reduce((s, x) => s + x, 0) / (a.length || 1);
+const median = (a: number[]) => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
 const pct = (recent: number, prior: number) => (prior > 0 ? Math.round(((recent / prior) - 1) * 1000) / 10 : null);
 
 // Growth of the topic's share of ALL papers (removes the general rise in publishing).
@@ -51,9 +63,9 @@ function stats(counts: Point[], totals: Map<number, number>) {
   return { rawGrowthPct: raw, relativeGrowthPct: relative, signal };
 }
 
-// A simple exponential trend over the last 6 years, with a rough range that widens over time.
-function project(counts: Point[], ahead = 3) {
-  const pts = counts.slice(-6).filter((c) => c.count > 0);
+// A simple exponential trend (a straight line through the logs of the yearly counts).
+function fitTrend(points: Point[]): Fit | null {
+  const pts = points.filter((c) => c.count > 0);
   if (pts.length < 5) return null;
   const xs = pts.map((p) => p.year);
   const ys = pts.map((p) => Math.log(p.count));
@@ -62,15 +74,79 @@ function project(counts: Point[], ahead = 3) {
   const sxx = xs.reduce((s, x) => s + (x - mx) * (x - mx), 0);
   if (sxx === 0) return null;
   const slope = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0) / sxx;
-  const intercept = my - slope * mx;
-  const resid = ys.map((y, i) => y - (intercept + slope * xs[i]));
-  const sd = Math.max(0.05, Math.sqrt(resid.reduce((s, r) => s + r * r, 0) / Math.max(1, pts.length - 2)));
+  return { slope, intercept: my - slope * mx };
+}
+const predict = (f: Fit, year: number) => Math.exp(f.intercept + f.slope * year);
+
+// The track record. Pretend it is an earlier year, forecast the years that came after it using only
+// the data available then, and compare with what really happened. Also scores the laziest possible
+// forecast ("same as the last known year") so we can say honestly whether the trend adds anything.
+function backtest(counts: Point[]): Horizon[] {
+  const rows: Record<number, { logErr: number[]; pctErr: number[]; naiveErr: number[] }> = {};
+  for (let h = 1; h <= MAX_H; h++) rows[h] = { logErr: [], pctErr: [], naiveErr: [] };
+
+  for (let end = WINDOW - 1; end < counts.length - 1; end++) {
+    const fit = fitTrend(counts.slice(end - WINDOW + 1, end + 1));
+    if (!fit) continue;
+    for (let h = 1; h <= MAX_H; h++) {
+      const target = counts[end + h];
+      if (!target || target.count <= 0) continue;
+      const guess = predict(fit, target.year);
+      rows[h].logErr.push(Math.log(target.count / guess));
+      rows[h].pctErr.push(Math.abs(target.count - guess) / target.count);
+      rows[h].naiveErr.push(Math.abs(target.count - counts[end].count) / target.count);
+    }
+  }
+
+  return Object.entries(rows)
+    .map(([h, r]) => ({
+      h: Number(h),
+      n: r.logErr.length,
+      rmse: Math.sqrt(avg(r.logErr.map((e) => e * e))),
+      medianPctError: Math.round(median(r.pctErr) * 1000) / 10,
+      naiveMedianPctError: Math.round(median(r.naiveErr) * 1000) / 10,
+    }))
+    .filter((x) => x.n > 0);
+}
+
+// Forecast with a range sized from the real misses above. If there are too few past tests, falls back
+// to a rougher in-sample range and says so (basis: "in-sample").
+function project(counts: Point[], bt: Horizon[], ahead = MAX_H) {
+  const recent = counts.slice(-WINDOW);
+  const fit = fitTrend(recent);
+  if (!fit) return null;
+  const pts = recent.filter((c) => c.count > 0);
+  const resid = pts.map((p) => Math.log(p.count) - (fit.intercept + fit.slope * p.year));
+  const inSample = Math.max(0.05, Math.sqrt(resid.reduce((s, r) => s + r * r, 0) / Math.max(1, pts.length - 2)));
+
+  let prevSd = 0;
   return Array.from({ length: ahead }, (_, i) => {
     const year = LAST_YEAR + 1 + i;
-    const mid = Math.exp(intercept + slope * year);
-    const spread = 1.28 * sd * (1 + i * 0.5);
-    return { year, mid: Math.round(mid), low: Math.round(mid * Math.exp(-spread)), high: Math.round(mid * Math.exp(spread)) };
+    const mid = predict(fit, year);
+    const tested = bt.find((b) => b.h === i + 1 && b.n >= MIN_TESTS);
+    // With only a handful of past tests the measured error is optimistic, so it gets a floor and a
+    // small-sample bump. The range never gets narrower for later years.
+    const measured = tested ? Math.max(0.08, tested.rmse) * (1 + 1 / Math.max(1, tested.n - 1)) : inSample * (1 + i * 0.5);
+    const sd = Math.max(measured, prevSd);
+    prevSd = sd;
+    const spread = 1.28 * sd; // roughly an 80% range
+    return {
+      year, mid: Math.round(mid), low: Math.round(mid * Math.exp(-spread)), high: Math.round(mid * Math.exp(spread)),
+      basis: tested ? "backtest" : "in-sample",
+    };
   });
+}
+
+// One plain sentence about how this forecast has done on this topic's own past.
+function trackRecord(bt: Horizon[]): string | null {
+  const one = bt.find((b) => b.h === 1 && b.n >= MIN_TESTS);
+  if (!one) return null;
+  const verdict =
+    one.medianPctError < one.naiveMedianPctError * 0.9 ? "did better than"
+    : one.medianPctError > one.naiveMedianPctError * 1.1 ? "did worse than"
+    : "was about as good as";
+  return `Tested on this topic's own past (${one.n} one-year-ahead forecasts), the trend was typically off by ${one.medianPctError}%. ` +
+    `Simply guessing "same as last year" was off by ${one.naiveMedianPctError}%, so the trend ${verdict} that simple guess.`;
 }
 
 // Which subtopics gained or lost share of the field (last 3 years vs the 3 before).
@@ -95,12 +171,14 @@ async function analyse(query: string, totals: Map<number, number>) {
   const byYear = new Map(yearly.map((g) => [Number(g.key), g.count]));
   const counts: Point[] = [];
   for (let y = FIRST_YEAR; y <= LAST_YEAR; y++) counts.push({ year: y, count: byYear.get(y) ?? 0 });
+  const bt = backtest(counts);
   return {
     query,
     counts,
     totalPapers: counts.reduce((s, c) => s + c.count, 0),
     stats: stats(counts, totals),
-    projection: project(counts),
+    projection: project(counts, bt),
+    backtest: { horizons: bt, summary: trackRecord(bt) },
     subtopics: subs,
     countries: countries.slice(0, 6).map(({ name, count }) => ({ name, count })),
   };

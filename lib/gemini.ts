@@ -1,16 +1,17 @@
 // Shared helper: calls Gemini with retries and backup models. Returns the model's text.
-export async function callGemini(prompt: string, task: string): Promise<string> {
+// Long answers (like the full project outlook) can pass bigger time limits in `opts`.
+export async function callGemini(prompt: string, task: string, opts: { timeoutMs?: number; budgetMs?: number } = {}): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("The server is missing GEMINI_API_KEY. Add it and try again.");
 
   const requestBody = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
+    generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 16384 },
   });
   const models = Array.from(new Set([process.env.GEMINI_MODEL || "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]));
   let lastStatus = 0;
   let lastDetail = "";
-  const deadline = Date.now() + 40_000;
+  const deadline = Date.now() + (opts.budgetMs ?? 40_000);
 
   outer: for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -22,7 +23,7 @@ export async function callGemini(prompt: string, task: string): Promise<string> 
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: requestBody,
           cache: "no-store",
-          signal: AbortSignal.timeout(20_000),
+          signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),
         });
       } catch {
         lastStatus = 504;
