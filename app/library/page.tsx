@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { SiteHeader } from "../site-header";
 import { supabase } from "../../lib/supabase";
 
 type Rec = Record<string, unknown>;
@@ -164,28 +164,28 @@ export default function Library() {
   }
 
   return (
+    <>
+    <SiteHeader />
     <main className="lb">
       <style>{`
-        .lb{--bg:#fafaf7;--card:#fff;--text:#1d2433;--muted:#667085;--line:#e4e7ec;--accent:#2f5bea;max-width:760px;margin:0 auto;padding:24px 16px 40px;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-        @media (prefers-color-scheme:dark){.lb{--bg:#12151c;--card:#1b2030;--text:#eef1f7;--muted:#9aa4b8;--line:#2c3347;--accent:#7b9bff}}
-        .lb a{color:var(--accent)}.lb h1{font-size:1.8rem;margin:12px 0 4px}.lb h2{font-size:1.15rem;margin:28px 0 8px}
+        .lb{max-width:760px;margin:0 auto;padding:24px 16px 40px;color:var(--text);}
+        .lb a{color:var(--link)}.lb h1{font-size:clamp(2rem,5vw,2.6rem);margin:12px 0 6px}.lb h2{font-size:1.3rem;margin:32px 0 8px}
         .lb .sub{color:var(--muted);margin:0 0 8px;font-size:.92rem}.lb .m{color:var(--muted);font-size:.82rem;word-break:break-word}
         .lb .card{margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .lb .card h3{margin:0 0 4px;font-size:1rem;line-height:1.35}
         .lb .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
         .lb button{background:none;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 12px;font:inherit;font-size:.82rem;cursor:pointer}
-        .lb button.main{border-color:var(--accent);color:var(--accent)}.lb button.del{color:#d92d20}
+        .lb button.main{border-color:var(--accent);color:var(--accent)}.lb button.del{color:var(--danger)}
         .lb a.btnlink{border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:.82rem;text-decoration:none}
         .lb details p{margin:8px 0 0;font-size:.9rem}.lb summary{cursor:pointer;color:var(--accent);font-size:.85rem;margin-top:8px}
         .lb .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
         .lb .note{margin-top:12px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--card);font-size:.85rem;word-break:break-all}
       `}</style>
 
-      <p><Link href="/">← Back to Scholar Lens</Link></p>
       <h1>My library</h1>
       <p className="sub">Your project outlooks and the papers you have studied are saved here automatically.</p>
       {loading && <p className="m">Loading…</p>}
-      {error && <p className="m" style={{ color: "#d92d20" }}>{error}</p>}
+      {error && <p className="m" style={{ color: "var(--danger)" }}>{error}</p>}
       {note && <div className="note">{note}</div>}
 
       <h2>Project outlooks ({reports.length})</h2>
@@ -240,5 +240,6 @@ export default function Library() {
         </div>
       ))}
     </main>
+    </>
   );
 }

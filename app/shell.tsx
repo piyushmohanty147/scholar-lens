@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SiteHeader } from "./site-header";
 import Papers from "./papers/page";
 import Outlook from "./outlook/page";
 
@@ -28,104 +29,76 @@ const STEPS = [
 const AUDIENCE = ["Students", "Research teams", "Startups", "Analysts", "Consultants"];
 const BARS = [22, 26, 31, 38, 47, 58, 73, 91];
 
-function Logo() {
-  return (
-    <span className="sxlogo">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-        <circle cx="11" cy="11" r="7.5" fill="none" stroke="currentColor" strokeWidth="2.4" />
-        <line x1="16.6" y1="16.6" x2="23" y2="23" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-      </svg>
-      Scholar<em>Lens</em>
-    </span>
-  );
-}
-
 export default function Shell() {
   const [tab, setTab] = useState<"papers" | "outlook">("outlook");
 
   return (
     <div className="sx">
       <style>{`
-        .sx{--c-bg:#faf8f4;--c-band:#f1ede4;--c-card:#ffffff;--c-text:#1f1d1a;--c-muted:#6b665e;--c-line:#e1dcd1;--c-accent:#0f766e;--ink:#0e1b18;--ink-line:rgba(255,255,255,.14);--hi:#6ee7c8;min-height:100vh;width:100%;color:var(--c-text);background:var(--c-bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-        @media (prefers-color-scheme:dark){.sx{--c-bg:#0f1112;--c-band:#151819;--c-card:#1a1e1f;--c-text:#ecebe8;--c-muted:#a09f98;--c-line:#2b3031;--c-accent:#0f9b8e}}
-        .sx a{color:var(--c-accent)}
-        .sx .sxwrap{max-width:1120px;width:100%;margin:0 auto;padding:0 20px}
+        .sx{min-height:100vh;width:100%;color:var(--text);background:var(--bg)}
+        .sx .sxwrap{max-width:var(--wrap);width:100%;margin:0 auto;padding:0 20px}
 
-        .sx .sxtop{background:var(--ink);color:#fff;border-bottom:1px solid var(--ink-line)}
-        .sx .sxnav{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--ink-line)}
-        .sx .sxlogo{display:inline-flex;align-items:center;gap:8px;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:1.3rem;color:#fff;letter-spacing:-.01em}
-        .sx .sxlogo em{font-style:normal;color:var(--hi)}.sx .sxlogo svg{color:var(--hi)}
-        .sx .sxlinks{display:flex;gap:22px;align-items:center;font-size:.92rem}
-        .sx .sxlinks a{color:#c9d6d1;text-decoration:none}.sx .sxlinks a:hover{color:#fff}
-        .sx .sxbeta{font-size:.72rem;border:1px solid var(--ink-line);border-radius:999px;padding:3px 10px;color:#c9d6d1}
-
-        .sx .sxhero{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;padding:68px 0 72px}
-        @media (max-width:880px){.sx .sxhero{grid-template-columns:1fr;gap:34px;padding:40px 0 44px}}
-        .sx .sxkick{font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hi)}
-        .sx .sxhl{font-family:Georgia,'Times New Roman',serif;font-weight:600;font-size:clamp(2.2rem,5vw,3.8rem);line-height:1.05;letter-spacing:-.025em;margin:14px 0 18px;color:#fff}
-        .sx .sxhl span{color:var(--hi)}
-        .sx .sxlead{font-size:1.12rem;line-height:1.6;color:#b9c8c2;max-width:520px;margin:0 0 28px}
+        .sx .sxtop{background:var(--bg);border-bottom:1px solid var(--line)}
+        .sx .sxhero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding:56px 0 76px}
+        @media (max-width:880px){.sx .sxhero{grid-template-columns:1fr;gap:36px;padding:28px 0 48px}}
+        .sx .sxkick{font-size:.95rem;font-weight:600;color:var(--link)}
+        .sx .sxhl{font-family:var(--font-display);font-weight:600;font-size:clamp(2.4rem,5.4vw,4.1rem);line-height:1.04;letter-spacing:-.03em;margin:14px 0 20px}
+        .sx .sxlead{font-size:1.14rem;line-height:1.65;color:var(--muted);max-width:520px;margin:0 0 30px}
         .sx .sxbtns{display:flex;gap:12px;flex-wrap:wrap}
-        .sx .sxbtn{display:inline-block;padding:13px 26px;border-radius:10px;font-weight:600;text-decoration:none;font-size:.98rem}
-        .sx .sxbtn.main{background:var(--hi);color:#08201a}
-        .sx .sxbtn.ghost{border:1px solid var(--ink-line);color:#fff;background:rgba(255,255,255,.04)}
+        .sx .sxbtn{display:inline-block;padding:14px 28px;border-radius:12px;font-weight:600;text-decoration:none;font-size:1rem}
+        .sx .sxbtn.main{background:var(--accent);color:var(--accent-ink)}
+        .sx .sxbtn.main:hover{filter:brightness(1.07)}
+        .sx .sxbtn.ghost{border:1px solid var(--line);color:var(--text);background:var(--card)}
+        .sx .sxbtn.ghost:hover{background:var(--card-2)}
 
-        .sx .sxprev{background:rgba(255,255,255,.05);border:1px solid var(--ink-line);border-radius:18px;padding:22px;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,.35)}
-        .sx .sxprev .lab{font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9fb3ab}
-        .sx .sxprev h3{margin:8px 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:1.1rem;line-height:1.3;color:#fff}
-        .sx .sxprev .sig{display:inline-block;background:var(--hi);color:#08201a;border-radius:999px;font-size:.74rem;font-weight:700;padding:3px 12px}
-        .sx .sxprev .bars{display:flex;align-items:flex-end;gap:6px;height:84px;margin:18px 0 4px}
-        .sx .sxprev .bar{flex:1;border-radius:4px 4px 0 0;background:var(--hi);opacity:.85}
-        .sx .sxprev .yrs{display:flex;justify-content:space-between;font-size:.66rem;color:#9fb3ab;margin-bottom:12px}
-        .sx .sxprev ul{margin:0;padding-left:18px}.sx .sxprev li{font-size:.86rem;line-height:1.45;margin-bottom:7px;color:#e6efeb}
-        .sx .sxprev .tg{display:inline-block;font-size:.66rem;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,.12);color:#cfe0d9;margin-left:4px;white-space:nowrap}
-        .sx .sxprev .note{font-size:.72rem;color:#9fb3ab;margin-top:8px}
+        .sx .sxprev{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:var(--shadow)}
+        .sx .sxprev .lab{font-size:.8rem;color:var(--muted)}
+        .sx .sxprev h3{margin:8px 0 12px;font-family:var(--font-display);font-weight:600;font-size:1.2rem;line-height:1.3;letter-spacing:-.01em}
+        .sx .sxprev .sig{display:inline-block;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(255,255,255,.28);border-radius:999px;font-size:.78rem;font-weight:600;padding:3px 12px}
+        .sx .sxprev .bars{display:flex;align-items:flex-end;gap:7px;height:96px;margin:20px 0 6px}
+        .sx .sxprev .bar{flex:1;border-radius:4px 4px 0 0;background:var(--data)}
+        .sx .sxprev .bar:nth-last-child(-n+3){background:rgba(255,255,255,.08);outline:1.5px dashed var(--accent);outline-offset:-1.5px}
+        .sx .sxprev .yrs{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:14px}
+        .sx .sxprev ul{margin:0;padding-left:18px}.sx .sxprev li{font-size:.9rem;line-height:1.5;margin-bottom:8px;color:var(--text)}
+        .sx .sxprev .tg{display:inline-block;font-size:.7rem;padding:1px 9px;border-radius:999px;background:var(--link-soft);color:var(--link);margin-left:4px;white-space:nowrap}
+        .sx .sxprev .note{font-size:.76rem;color:var(--muted);margin-top:10px}
 
-        .sx .sxtrust{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));padding:26px 0 8px}
-        .sx .sxtrust div{font-size:.86rem;color:var(--c-muted);border-top:2px solid var(--c-accent);padding-top:10px}
+        .sx .sxtrust{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));padding:30px 0 8px}
+        .sx .sxtrust div{font-size:.9rem;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
 
-        .sx .sxband{background:var(--c-band);border-top:1px solid var(--c-line);border-bottom:1px solid var(--c-line);margin-top:48px;padding:56px 0 48px;scroll-margin-top:0}
-        .sx .sxtoolhead{text-align:center;margin-bottom:12px}
-        .sx .sxtoolhead h2{font-family:Georgia,'Times New Roman',serif;font-size:clamp(1.7rem,3.5vw,2.4rem);margin:0 0 6px}
-        .sx .sxtoolhead p{margin:0 0 18px;color:var(--c-muted)}
-        .sx .sxtabs{display:inline-flex;gap:4px;padding:5px;border-radius:999px;background:var(--c-card);border:1px solid var(--c-line)}
-        .sx .sxtabs button{border:0;background:none;color:var(--c-muted);font-weight:600;padding:10px 24px;border-radius:999px}
-        .sx .sxtabs button.on{background:var(--c-accent);color:#fff}
+        .sx .sxband{background:var(--band);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:52px;padding:60px 0 52px;scroll-margin-top:0}
+        .sx .sxtoolhead{text-align:center;margin-bottom:14px}
+        .sx .sxtoolhead h2{font-size:clamp(1.8rem,3.6vw,2.6rem);margin:0 0 8px}
+        .sx .sxtoolhead p{margin:0 0 20px;color:var(--muted)}
+        .sx .sxtabs{display:inline-flex;gap:4px;padding:5px;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+        .sx .sxtabs button{border:0;background:none;color:var(--muted);font-weight:600;padding:10px 24px;border-radius:999px}
+        .sx .sxtabs button:hover:not(.on){color:var(--text)}
+        .sx .sxtabs button.on{background:var(--accent);color:var(--accent-ink)}
         .sx .sxpanel .sl>.tag,.sx .sxpanel .sl>h1,.sx .sxpanel .sl>.sub{display:none}
         .sx .sxpanel .sl,.sx .sxpanel .ol{padding-top:14px}
-        /* make the two tools use this page's colours */
-        .sx .ol,.sx .sl{--bg:var(--c-band);--card:var(--c-card);--text:var(--c-text);--muted:var(--c-muted);--line:var(--c-line);--accent:var(--c-accent)}
 
-        .sx .sxsec{font-family:Georgia,'Times New Roman',serif;font-size:clamp(1.5rem,3vw,2.1rem);margin:76px 0 22px}
-        .sx .sxfeat{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
-        .sx .sxfc{background:var(--c-card);border:1px solid var(--c-line);border-radius:14px;padding:22px;text-decoration:none;color:inherit;display:block}
-        .sx .sxfc h3{margin:0 0 8px;font-size:1.05rem}.sx .sxfc p{margin:0;color:var(--c-muted);font-size:.92rem;line-height:1.55}
-        .sx .sxfc.link{border-color:var(--c-accent)}.sx .sxfc .go{display:inline-block;margin-top:12px;font-weight:600;font-size:.9rem;color:var(--c-accent)}
-        .sx .sxsteps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:28px}
-        .sx .sxnum{font-family:Georgia,'Times New Roman',serif;font-size:2.6rem;line-height:1;color:var(--c-accent);margin-bottom:8px}
-        .sx .sxstep h3{margin:0 0 6px;font-size:1.05rem}.sx .sxstep p{margin:0;color:var(--c-muted);font-size:.93rem;line-height:1.55}
+        .sx .sxsec{font-size:clamp(1.7rem,3.2vw,2.3rem);margin:84px 0 24px}
+        .sx .sxfeat{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+        .sx .sxfc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;display:block}
+        .sx .sxfc:hover{border-color:var(--link)}
+        .sx .sxfc h3{margin:0 0 8px;font-size:1.08rem}.sx .sxfc p{margin:0;color:var(--muted);font-size:.94rem;line-height:1.6}
+        .sx .sxfc.link{border-color:rgba(255,255,255,.3)}.sx .sxfc .go{display:inline-block;margin-top:14px;font-weight:600;font-size:.92rem;color:var(--accent)}
+        .sx .sxsteps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px}
+        .sx .sxnum{font-family:var(--font-display);font-size:2.8rem;line-height:1;color:var(--accent);margin-bottom:10px}
+        .sx .sxstep h3{margin:0 0 6px;font-size:1.08rem}.sx .sxstep p{margin:0;color:var(--muted);font-size:.95rem;line-height:1.6}
         .sx .sxaud{display:flex;flex-wrap:wrap;gap:10px}
-        .sx .sxaud span{border:1px solid var(--c-line);background:var(--c-card);border-radius:999px;padding:9px 18px;font-weight:600;font-size:.92rem}
+        .sx .sxaud span{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:9px 18px;font-weight:600;font-size:.92rem}
 
-        .sx .sxcta{margin:80px 0 0;padding:44px 24px;border-radius:22px;background:var(--ink);color:#fff;text-align:center}
-        .sx .sxcta h2{font-family:Georgia,'Times New Roman',serif;font-size:clamp(1.5rem,3vw,2.1rem);margin:0 0 8px;color:#fff}
-        .sx .sxcta p{margin:0 0 22px;color:#b9c8c2}
-        .sx .sxcta a.sxbtn{background:var(--hi);color:#08201a}
-        .sx .sxfoot{margin:48px 0 0;padding:22px 0 44px;border-top:1px solid var(--c-line);color:var(--c-muted);font-size:.82rem;line-height:1.55}
-        .sx .sxfoot small{display:block;margin-top:8px;opacity:.7}
+        .sx .sxcta{margin:88px 0 0;padding:52px 24px;border-radius:26px;background:var(--card-2);border:1px solid var(--line);text-align:center}
+        .sx .sxcta h2{font-size:clamp(1.7rem,3.2vw,2.3rem);margin:0 0 8px}
+        .sx .sxcta p{margin:0 0 24px;color:var(--muted)}
+        .sx .sxcta a.sxbtn{background:var(--accent);color:var(--accent-ink)}
+        .sx .sxfoot{margin:52px 0 0;padding:24px 0 48px;border-top:1px solid var(--line);color:var(--muted);font-size:.84rem;line-height:1.6}
       `}</style>
 
-      <header className="sxtop">
+      <div className="sxtop">
+        <SiteHeader />
         <div className="sxwrap">
-          <nav className="sxnav">
-            <Logo />
-            <div className="sxlinks">
-              <Link href="/guides/trends">Trend explorer</Link>
-              <Link href="/guides">Guides</Link>
-              <span className="sxbeta">Beta</span>
-            </div>
-          </nav>
-
           <div className="sxhero">
             <div>
               <div className="sxkick">AI research intelligence</div>
@@ -144,7 +117,7 @@ export default function Shell() {
               <div className="bars" aria-hidden="true">
                 {BARS.map((v, i) => <div className="bar" key={i} style={{ height: `${v}%` }} />)}
               </div>
-              <div className="yrs"><span>Papers per year</span><span>Recent years →</span></div>
+              <div className="yrs"><span>Papers per year</span><span>Dashed: projection</span></div>
               <ul>
                 <li>Several subtopics are growing faster than the field overall. <span className="tg">evidence: strong</span></li>
                 <li>More papers show research attention, not market success. <span className="tg">caveat</span></li>
@@ -154,7 +127,7 @@ export default function Shell() {
             </aside>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="sxwrap">
         <div className="sxtrust">
@@ -208,7 +181,6 @@ export default function Shell() {
 
         <div className="sxfoot">
           Scholar Lens gives informed outlooks based on published research. It cannot predict the future and is not financial, medical or legal advice. Always check the cited sources.
-          <small>Design v3</small>
         </div>
       </div>
     </div>
