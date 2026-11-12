@@ -236,7 +236,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[], finance
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    if (!allow(ip, 30)) {
+    if (!(await allow(ip, 30, "search"))) {
       return NextResponse.json({ error: "You've reached the free limit. Please try again later." }, { status: 429 });
     }
     const body = await request.json() as { question?: unknown; field?: unknown };
