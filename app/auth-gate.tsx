@@ -14,15 +14,20 @@ type Rec = Record<string, unknown>;
 const PUBLIC_PATHS = ["/privacy", "/terms", "/refund", "/contact"];
 const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
-// The server routes read the sign-in token from this cookie.
-function syncCookie(session: Session | null) {
-  const secure = window.location.protocol === "https:" ? "; secure" : "";
-  if (session?.access_token) {
-    const age = session.expires_at ? Math.max(60, session.expires_at - Math.floor(Date.now() / 1000)) : 3600;
-    document.cookie = `sl_token=${session.access_token}; path=/; max-age=${age}; samesite=lax${secure}`;
-  } else {
-    document.cookie = `sl_token=; path=/; max-age=0; samesite=lax${secure}`;
-  }
+// The server keeps the sign-in token in an httpOnly cookie (set by /api/session), so scripts on the page
+// cannot read it. Resolves once the cookie is set or cleared; it never throws.
+async function syncCookie(session: Session | null): Promise<void> {
+  try {
+    if (session?.access_token) {
+      await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: session.access_token }),
+      });
+    } else {
+      await fetch("/api/session", { method: "DELETE" });
+    }
+  } catch { /* offline: the next sign-in event tries again */ }
 }
 
 // Daily usage resets at midnight UTC.
@@ -117,14 +122,17 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     let alive = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!alive) return;
-      syncCookie(data.session);
-      setSession(data.session);
-      setReady(true);
+      syncCookie(data.session).finally(() => {
+        if (!alive) return;
+        setSession(data.session);
+        setReady(true);
+      });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      syncCookie(s);
-      setSession(s);
-      setReady(true);
+      syncCookie(s).finally(() => {
+        setSession(s);
+        setReady(true);
+      });
     });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
@@ -188,7 +196,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   async function signOut() {
     setMenuOpen(false);
     await supabase.auth.signOut();
-    syncCookie(null);
+    await syncCookie(null);
     setSession(null);
   }
 
