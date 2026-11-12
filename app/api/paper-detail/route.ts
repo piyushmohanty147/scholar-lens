@@ -55,7 +55,7 @@ function parseObject(text: string): Rec {
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    if (!allow(ip, 40)) {
+    if (!(await allow(ip, 40, "detail"))) {
       return NextResponse.json({ error: "You have reached the free limit. Please try again later." }, { status: 429 });
     }
     const body = (await request.json()) as { paperId?: unknown; title?: unknown; abstract?: unknown; question?: unknown };

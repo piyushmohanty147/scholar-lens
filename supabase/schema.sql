@@ -150,3 +150,26 @@ create table if not exists public.subscribers (
 alter table public.subscribers enable row level security;
 drop policy if exists "subscribe" on public.subscribers;
 create policy "subscribe" on public.subscribers for insert to anon, authenticated with check (true);
+
+
+-- 9. Shared per-IP rate limit (used by the public API routes). Fixed one-hour windows.
+create table if not exists public.ip_hits (
+  key text not null,
+  bucket timestamptz not null,
+  count int not null default 0,
+  primary key (key, bucket)
+);
+alter table public.ip_hits enable row level security;
+
+create or replace function public.rate_hit(p_key text, p_max int, p_window_seconds int default 3600) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare n int; b timestamptz;
+begin
+  b := to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  insert into public.ip_hits (key, bucket, count) values (left(p_key, 200), b, 1)
+  on conflict (key, bucket) do update set count = public.ip_hits.count + 1
+  returning count into n;
+  if random() < 0.02 then delete from public.ip_hits where bucket < now() - interval '1 day'; end if;
+  return n <= p_max;
+end $$;
+grant execute on function public.rate_hit(text, int, int) to anon, authenticated;
