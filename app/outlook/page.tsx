@@ -128,8 +128,8 @@ export default function Outlook() {
         .ol .msg{margin-top:24px;color:var(--muted)}.ol .err{color:var(--danger)}
         .ol .box{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .ol ul{margin:0;padding-left:20px}.ol li{margin-bottom:10px}.ol .m{color:var(--muted);font-size:.85rem}
-        .ol .str{display:inline-block;font-size:.7rem;padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted);white-space:nowrap}
-        .ol .chip{display:inline-block;font-size:.75rem;padding:2px 10px;border-radius:999px;background:var(--line);color:var(--text);margin:2px 6px 2px 0}
+        .ol .str{display:inline-block;font-size:.7rem;padding:1px 8px;border-radius:999px;background:var(--fill);color:var(--muted);white-space:nowrap}
+        .ol .chip{display:inline-block;font-size:.75rem;padding:2px 10px;border-radius:999px;background:var(--fill);color:var(--text);margin:2px 6px 2px 0}
         .ol .bottom{margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);border-radius:6px;font-weight:600}
         .ol .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
         .ol .bars{display:flex;align-items:flex-end;gap:4px;height:60px;margin:6px 0}

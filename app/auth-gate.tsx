@@ -240,14 +240,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .menu .who b{display:block;font-size:.95rem;word-break:break-word}
     .ag .menu .who span{display:block;font-size:.8rem;color:var(--muted);word-break:break-all;margin-top:2px}
     .ag .menu a,.ag .menu button{display:block;width:100%;box-sizing:border-box;text-align:left;padding:12px 16px;background:none;border:0;color:var(--text);font:inherit;font-size:.92rem;text-decoration:none;cursor:pointer}
-    .ag .menu a:hover,.ag .menu button:hover{background:var(--line)}
+    .ag .menu a:hover,.ag .menu button:hover{background:var(--fill)}
     .ag .menu .sep{border-top:1px solid var(--line)}
     .ag .shade{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
     .ag .modal{max-width:440px;width:100%;max-height:90vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
     .ag .modal h2{margin:0 0 6px;font-size:1.3rem}
     .ag .modal p{margin:0 0 12px;color:var(--muted);font-size:.92rem}
     .ag .modal ul{margin:0 0 16px;padding-left:20px;font-size:.92rem}.ag .modal li{margin-bottom:6px}
-    .ag .clock{display:inline-block;padding:4px 12px;border-radius:999px;background:var(--line);font-size:.82rem;margin-bottom:14px}
+    .ag .clock{display:inline-block;padding:4px 12px;border-radius:999px;background:var(--fill);font-size:.82rem;margin-bottom:14px}
     .ag .modal .btn{margin-top:8px}
   `;
 

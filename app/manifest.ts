@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "AI research paper search, deep dives and project outlooks",
     start_url: "/",
     display: "standalone",
-    background_color: "#0d0d0f",
-    theme_color: "#0d0d0f",
+    background_color: "#070406",
+    theme_color: "#070406",
     icons: [
       { src: "/pwa-icon/192", sizes: "192x192", type: "image/png" },
       { src: "/pwa-icon/512", sizes: "512x512", type: "image/png" },

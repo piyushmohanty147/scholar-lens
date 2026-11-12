@@ -208,7 +208,7 @@ export default function Home() {
         .sl .card{margin-top:14px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .sl .card h3{margin:0 0 6px;font-size:1.05rem;line-height:1.3}.sl .card h3 a{color:inherit;text-decoration:none}.sl .card h3 a:hover{text-decoration:underline}
         .sl .meta{color:var(--muted);font-size:.82rem}.sl .why{margin:8px 0 0;font-size:.92rem}
-        .sl .badge{display:inline-block;margin:0 6px 6px 0;padding:2px 8px;border-radius:999px;background:var(--line);font-size:.72rem;color:var(--text)}
+        .sl .badge{display:inline-block;margin:0 6px 6px 0;padding:2px 8px;border-radius:999px;background:var(--fill);font-size:.72rem;color:var(--text)}
         .sl .oa{display:inline-block;margin:0 6px 6px 0;padding:2px 10px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:.72rem;text-decoration:none}
         .sl .acts{display:flex;gap:8px;flex-wrap:wrap}
         .sl .sum{margin-top:10px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer}

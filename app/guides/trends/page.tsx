@@ -116,7 +116,7 @@ export default function TrendExplorer() {
         .tr .card{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--edge)}
         .tr .card h2{margin:0 0 8px;font-size:1.15rem;}
         .tr .stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-        .tr .pill{display:inline-block;font-size:.76rem;padding:3px 11px;border-radius:999px;background:var(--line);color:var(--text)}
+        .tr .pill{display:inline-block;font-size:.76rem;padding:3px 11px;border-radius:999px;background:var(--fill);color:var(--text)}
         .tr .pill.big{background:var(--accent);color:var(--accent-ink);font-weight:600}
         .tr .chart{width:100%;height:auto;margin-top:6px}
         .tr .track{margin:10px 0;padding:10px 12px;border-left:3px solid var(--accent2);background:var(--bg,transparent);border-radius:6px;font-size:.86rem}
