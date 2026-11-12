@@ -14,7 +14,7 @@ export default function Page() {
       <p>{SITE_NAME} lets you search scholarly papers, read AI-generated deep dives of individual papers, and generate AI-written project outlooks based on published research. It is delivered online and nothing is shipped.</p>
 
       <h2>Who can use it</h2>
-      <p>You must be at least 13 years old. To buy a paid plan you must be 18 or older, or have a parent or guardian&apos;s permission.</p>
+      <p>You must be at least 18 years old to use Scholar Lens.</p>
 
       <h2>Your account</h2>
       <p>You are responsible for activity on your account. Provide a real email address and keep your sign-in secure.</p>

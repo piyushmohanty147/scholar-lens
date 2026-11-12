@@ -34,10 +34,10 @@ export default function Page() {
       <p>We keep your account and usage records while your account is active. You can delete saved outlooks and papers yourself in My library, and you can ask us to delete your account and associated data at any time (see below). We may keep payment records as long as required for accounting and legal reasons.</p>
 
       <h2>Your choices</h2>
-      <p>You can ask to access, correct or delete your information by emailing us. We will respond within a reasonable time.</p>
+      <p>You can delete your account and everything saved in it yourself from the account menu (Delete my account). You can also ask to access, correct or delete your information by emailing us. We will respond within a reasonable time.</p>
 
       <h2>Children</h2>
-      <p>The service is not intended for children under 13. If you believe a child has given us personal information, contact us and we will delete it.</p>
+      <p>The service is for adults only. You must be 18 or older to create an account. If you believe someone under 18 has given us personal information, contact us and we will delete it.</p>
 
       <h2>Security</h2>
       <p>We use reputable providers and access controls to protect your data, but no online service is completely secure.</p>
