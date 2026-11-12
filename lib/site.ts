@@ -1,6 +1,3 @@
-export const SITE_NAME = "Scholar Lens";
-export const OWNER_NAME = "Scholar Lens";
-export const CONTACT_EMAIL = "scholarlensteam@gmail.com";
-export const CONTACT_PHONE = "";
-export const CONTACT_ADDRESS = "India";
-export const LEGAL_UPDATED = "11 October 2026";
+// The public address of the site, in one place. Set NEXT_PUBLIC_SITE_URL in Vercel to your real domain.
+export const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://scholar-lens-emc5.vercel.app").replace(/\/$/, "");
+export const SITE_HOST = SITE.replace(/^https?:\/\//, "");

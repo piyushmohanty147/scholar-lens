@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { GUIDES } from "../lib/guides";
+import { SITE } from "../lib/site";
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://scholar-lens-emc5.vercel.app";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

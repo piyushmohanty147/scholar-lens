@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
+import { SITE } from "../lib/site";
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://scholar-lens-emc5.vercel.app";
 
 export default function robots(): MetadataRoute.Robots {
   return {
