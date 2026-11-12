@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
-import { SITE_HOST } from "../../../lib/site";
 
 type Rec = Record<string, unknown>;
 type Shared = { project: string; audience: string | null; horizon: string | null; created_at: string; result: Rec };
@@ -131,7 +130,7 @@ export default function SharedReport() {
           {box("Glossary", arr(rep.glossary).length > 0, <ul>{arr(rep.glossary).map(obj).map((g, k) => <li key={k}><strong>{str(g.term)}:</strong> {str(g.meaning)}</li>)}</ul>)}
           {box("Sources", sources.length > 0, <ul>{sources.map((s, k) => <li key={k}>[{str(s.id)}] {str(s.url) ? <a href={str(s.url)} target="_blank" rel="noopener noreferrer">{str(s.title)}</a> : str(s.title)}{num(s.year) ? ` (${num(s.year)})` : ""}</li>)}</ul>)}
 
-          <p className="m"><em>{str(rep.caveat) || "Research activity is not the same as real-world outcomes."} This is an informed outlook based on published research, not a guarantee or financial advice. Created with Scholar Lens ({SITE_HOST}).</em></p>
+          <p className="m"><em>{str(rep.caveat) || "Research activity is not the same as real-world outcomes."} This is an informed outlook based on published research, not a guarantee or financial advice. Created with Scholar Lens (scholar-lens-emc5.vercel.app).</em></p>
           <button onClick={() => window.print()}>Print or save as PDF</button>
           <p className="m"><Link href="/">Make your own outlook with Scholar Lens</Link></p>
         </>
