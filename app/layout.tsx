@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description: "AI-powered research paper discovery, deep dives and project outlooks",
   keywords: ["research papers", "paper search", "literature review", "research forecasting", "project outlook"],
   verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION },
-  icons: { icon: "/pwa-icon/192", apple: "/pwa-icon/192" },
+  icons: { icon: "/pwa-icon/192?v=2", apple: "/pwa-icon/192?v=2" },
 };
 
 export const viewport: Viewport = {
