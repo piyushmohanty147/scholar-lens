@@ -187,7 +187,7 @@ async function analyse(query: string, totals: Map<number, number>) {
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    if (!allow(ip, 20)) {
+    if (!(await allow(ip, 20, "trends"))) {
       return NextResponse.json({ error: "You have reached the limit for now. Please try again later." }, { status: 429 });
     }
     if (!process.env.OPENALEX_API_KEY) {

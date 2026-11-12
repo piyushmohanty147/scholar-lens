@@ -170,7 +170,7 @@ function cleanItems(raw: unknown, valid: Set<string>) {
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    if (!allow(ip)) {
+    if (!(await allow(ip, 8, "outlook"))) {
       return NextResponse.json({ error: "You've reached the free limit. Please try again later." }, { status: 429 });
     }
     if (!process.env.OPENALEX_API_KEY) {
