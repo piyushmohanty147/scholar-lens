@@ -14,15 +14,20 @@ type Rec = Record<string, unknown>;
 const PUBLIC_PATHS = ["/privacy", "/terms", "/refund", "/contact"];
 const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
-// The server routes read the sign-in token from this cookie.
-function syncCookie(session: Session | null) {
-  const secure = window.location.protocol === "https:" ? "; secure" : "";
-  if (session?.access_token) {
-    const age = session.expires_at ? Math.max(60, session.expires_at - Math.floor(Date.now() / 1000)) : 3600;
-    document.cookie = `sl_token=${session.access_token}; path=/; max-age=${age}; samesite=lax${secure}`;
-  } else {
-    document.cookie = `sl_token=; path=/; max-age=0; samesite=lax${secure}`;
-  }
+// The server keeps the sign-in token in an httpOnly cookie (set by /api/session), so scripts on the page
+// cannot read it. Resolves once the cookie is set or cleared; it never throws.
+async function syncCookie(session: Session | null): Promise<void> {
+  try {
+    if (session?.access_token) {
+      await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: session.access_token }),
+      });
+    } else {
+      await fetch("/api/session", { method: "DELETE" });
+    }
+  } catch { /* offline: the next sign-in event tries again */ }
 }
 
 // Daily usage resets at midnight UTC.
@@ -107,6 +112,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [joined, setJoined] = useState(false);
   const [joinMsg, setJoinMsg] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [subEmail, setSubEmail] = useState("");
   const [subMsg, setSubMsg] = useState("");
 
@@ -117,14 +123,17 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     let alive = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!alive) return;
-      syncCookie(data.session);
-      setSession(data.session);
-      setReady(true);
+      syncCookie(data.session).finally(() => {
+        if (!alive) return;
+        setSession(data.session);
+        setReady(true);
+      });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      syncCookie(s);
-      setSession(s);
-      setReady(true);
+      syncCookie(s).finally(() => {
+        setSession(s);
+        setReady(true);
+      });
     });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
@@ -188,7 +197,18 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   async function signOut() {
     setMenuOpen(false);
     await supabase.auth.signOut();
-    syncCookie(null);
+    await syncCookie(null);
+    setSession(null);
+  }
+
+  // Permanently deletes the account and everything saved under it (see delete_my_account in supabase/schema.sql).
+  async function deleteAccount() {
+    setMenuOpen(false);
+    if (!window.confirm("Delete your account and everything saved in it? This cannot be undone.")) return;
+    const { error } = await supabase.rpc("delete_my_account");
+    if (error) { window.alert("Could not delete the account right now. Please email us and we will do it for you."); return; }
+    await supabase.auth.signOut();
+    await syncCookie(null);
     setSession(null);
   }
 
@@ -225,6 +245,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     .ag .sec p,.ag .sec li{font-size:.94rem;color:var(--muted);line-height:1.55}.ag .sec ol{padding-left:20px;margin:0}
     .ag .sec a{color:var(--link)}
     .ag .feat{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+    .ag .agree{display:flex;gap:10px;align-items:flex-start;font-size:.86rem;color:var(--muted);margin:0 0 12px;line-height:1.45;cursor:pointer}
+    .ag .agree input{width:auto;margin:3px 0 0;accent-color:var(--accent);flex:none}
     .ag .fc{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:18px}
     .ag .fc h3{margin:0 0 6px;font-size:.98rem}.ag .fc p{margin:0;font-size:.86rem}
     .ag details{border-bottom:1px solid var(--line);padding:10px 0}.ag summary{cursor:pointer;font-weight:600;font-size:.94rem}
@@ -299,10 +321,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             <p className="msg">Sign-in is not set up yet. The site owner needs to add the Supabase keys.</p>
           ) : (
             <>
-              <button className="btn main" onClick={google} disabled={busy}>Continue with Google</button>
+              <label className="agree"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> <span>I am 18 or older and I agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.</span></label>
+              <button className="btn main" onClick={google} disabled={busy || !agreed}>Continue with Google</button>
               <div className="or">or use your email</div>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-              <button className="btn" onClick={emailLink} disabled={busy}>Email me a sign-in link</button>
+              <button className="btn" onClick={emailLink} disabled={busy || !agreed}>Email me a sign-in link</button>
               {msg ? <p className="msg">{msg}</p> : null}
             </>
           )}
@@ -344,6 +367,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             <Link href="/contact" role="menuitem" onClick={() => setMenuOpen(false)}>Help and contact</Link>
             <Link href="/privacy" role="menuitem" onClick={() => setMenuOpen(false)}>Privacy policy</Link>
             <button type="button" className="sep" role="menuitem" onClick={signOut}>Sign out</button>
+            <button type="button" role="menuitem" style={{ color: "var(--danger)" }} onClick={deleteAccount}>Delete my account</button>
           </div>
         )}
       </div>
