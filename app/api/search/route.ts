@@ -150,6 +150,26 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
 // Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
 const tokens = (text: string) => (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
 
+
+function toPaper(work: OpenAlexWork): SemanticPaper {
+  const fields: string[] = [];
+  for (const t of work.topics ?? []) {
+    const name = t.field?.display_name;
+    if (name && !fields.includes(name)) fields.push(name);
+  }
+  return {
+    paperId: work.id,
+    title: work.title ?? undefined,
+    abstract: rebuildAbstract(work.abstract_inverted_index),
+    year: work.publication_year ?? null,
+    authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+    url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+    fieldsOfStudy: fields,
+    source: "OpenAlex",
+    titleMatch: true,
+  };
+}
+
 async function titleSearch(query: string): Promise<SemanticPaper[]> {
   const apiKey = process.env.OPENALEX_API_KEY;
   if (!apiKey) return [];
@@ -164,18 +184,15 @@ async function titleSearch(query: string): Promise<SemanticPaper[]> {
   const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
   if (!response.ok) return [];
   const data = (await response.json()) as { results?: OpenAlexWork[] };
-  return (data.results ?? [])
-    .filter((work) => work.id && work.title)
-    .flatMap((work) => {
-      const have = tokens(work.title ?? "");
-      const covered = want.filter((w) => have.some((h) => h === w || h.startsWith(w) || w.startsWith(h))).length / want.length;
-      if (covered < 0.8) return [];
-      return [{
-        paperId: work.id, title: work.title ?? undefined, abstract: rebuildAbstract(work.abstract_inverted_index), year: work.publication_year ?? null,
-        authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })), url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
-        fieldsOfStudy: Array.from(new Set((work.topics ?? []).map((t) => t.field?.display_name).filter((n): n is string => Boolean(n)))), source: "OpenAlex", titleMatch: true,
-      }];
-    });
+  const out: SemanticPaper[] = [];
+  for (const work of data.results ?? []) {
+    if (!work.id || !work.title) continue;
+    const have = tokens(work.title);
+    const hit = want.filter((w) => have.some((h) => h === w || h.startsWith(w) || w.startsWith(h))).length;
+    if (hit / want.length < 0.8) continue;
+    out.push(toPaper(work));
+  }
+  return out;
 }
 
 async function doiLookup(question: string): Promise<SemanticPaper[]> {
@@ -191,11 +208,7 @@ async function doiLookup(question: string): Promise<SemanticPaper[]> {
     if (!response.ok) return [];
     const work = (await response.json()) as OpenAlexWork;
     if (!work.id || !work.title) return [];
-    return [{
-      paperId: work.id, title: work.title, abstract: rebuildAbstract(work.abstract_inverted_index), year: work.publication_year ?? null,
-      authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })), url: work.doi ?? work.primary_location?.landing_page_url ?? work.id,
-      fieldsOfStudy: Array.from(new Set((work.topics ?? []).map((t) => t.field?.display_name).filter((n): n is string => Boolean(n)))), source: "OpenAlex", titleMatch: true,
-    }];
+    return [toPaper(work)];
   } catch {
     return [];
   }
