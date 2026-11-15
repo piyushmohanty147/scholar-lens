@@ -7,6 +7,8 @@ type Paper = {
   paperId: string; title: string; year: number | null; url: string | null; authors: string[];
   fieldsOfStudy: string[]; source: string; abstract: string; score: number; explanation: string;
 };
+type AuthorHit = { id: string; name: string; institution: string; worksCount: number; citedBy: number };
+type AuthorInfo = { author: AuthorHit; others: AuthorHit[]; total: number; page: number; hasMore: boolean };
 type Analysis = {
   plainSummary?: string; background?: string; researchQuestion?: string;
   studyDesign?: { type?: string; sample?: string; methods?: string };
@@ -145,16 +147,24 @@ export default function Home() {
   const [papers, setPapers] = useState<Paper[] | null>(null);
   const [details, setDetails] = useState<Record<string, DetailState>>({});
   const [copied, setCopied] = useState("");
+  const [author, setAuthor] = useState<AuthorInfo | null>(null);
 
-  async function search(q = question) {
+  async function search(q = question, opts: { authorId?: string; page?: number } = {}) {
     const text = q.trim();
     if (!text || loading) return;
-    setLoading(true); setError(""); setPapers(null); setDetails({}); setAsked(text);
+    const more = (opts.page ?? 1) > 1;
+    setLoading(true); setError(""); setAsked(text);
+    if (!more) { setPapers(null); setDetails({}); setAuthor(null); }
     try {
-      const res = await fetch("/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: text, field }) });
+      const res = await fetch("/api/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: text, field, authorId: opts.authorId, page: opts.page }) });
       const data = await readJson(res);
       if (!res.ok || data.error) setError(String(data.error ?? "Search failed."));
-      else setPapers((data.papers as Paper[]) ?? []);
+      else {
+        const list = (data.papers as Paper[]) ?? [];
+        setPapers((prev) => (more && prev ? [...prev, ...list.filter((p) => !prev.some((x) => x.paperId === p.paperId))] : list));
+        const a = data.author as AuthorHit | undefined;
+        setAuthor(a ? { author: a, others: (data.others as AuthorHit[]) ?? [], total: Number(data.total ?? 0), page: Number(data.page ?? 1), hasMore: Boolean(data.hasMore) } : null);
+      }
     } catch { setError("Could not reach the server. Check your connection and try again."); }
     setLoading(false);
   }
@@ -204,7 +214,7 @@ export default function Home() {
         .sl .go:disabled{opacity:.5;cursor:default}
         .sl .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
         .sl .chip{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;padding:6px 12px;font:inherit;font-size:.8rem;cursor:pointer;text-align:left}
-        .sl .msg{margin-top:24px;color:var(--muted)}.sl .err{color:var(--danger)}
+        .sl .msg{margin-top:24px;color:var(--muted)}.sl .authorbox{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 14px;display:grid;gap:8px}.sl .authorbox .note{color:var(--muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.sl .err{color:var(--danger)}
         .sl .card{margin-top:14px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
         .sl .card h3{margin:0 0 6px;font-size:1.05rem;line-height:1.3}.sl .card h3 a{color:inherit;text-decoration:none}.sl .card h3 a:hover{text-decoration:underline}
         .sl .meta{color:var(--muted);font-size:.82rem}.sl .why{margin:8px 0 0;font-size:.92rem}
@@ -249,6 +259,21 @@ export default function Home() {
       {!loading && !error && papers === null && <p className="msg">Your most relevant papers will appear here.</p>}
       {papers && papers.length === 0 && !loading && <p className="msg">No strongly relevant papers found. Try rewording your question.</p>}
 
+      {author && (
+        <div className="authorbox">
+          <p><strong>Papers by {author.author.name}</strong>{author.author.institution ? `, ${author.author.institution}` : ""}. Most cited first. Showing {papers?.length ?? 0} of {author.total.toLocaleString()}.</p>
+          {author.others.length > 0 && (
+            <p className="note">Not the right person?{" "}
+              {author.others.map((o) => (
+                <button key={o.id} type="button" className="chip" onClick={() => search(asked, { authorId: o.id })}>
+                  {o.name}{o.institution ? `, ${o.institution}` : ""} ({o.worksCount.toLocaleString()} works)
+                </button>
+              ))}
+            </p>
+          )}
+        </div>
+      )}
+
       {shown && shown.length > 0 && (
         <div className="top">
           <span className="meta">{shown.length} papers found</span>
@@ -268,7 +293,7 @@ export default function Home() {
             <h3>{p.url ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</h3>
             <div className="meta">
               {p.source && <span className="badge">{p.source}</span>}
-              {[p.authors.slice(0, 4).join(", "), p.year].filter(Boolean).join(" · ")} · Relevance {p.score}/10
+              {[p.authors.slice(0, 4).join(", "), p.year].filter(Boolean).join(" · ")} {!author && <> · Relevance {p.score}/10</>}
             </div>
             {p.explanation && <p className="why">{p.explanation}</p>}
             <div className="acts">
@@ -284,6 +309,10 @@ export default function Home() {
           </article>
         );
       })}
+
+      {author?.hasMore && !loading && (
+        <p className="msg"><button type="button" className="sum" onClick={() => search(asked, { authorId: author.author.id, page: author.page + 1 })}>Show 25 more papers</button></p>
+      )}
     </main>
   );
 }
