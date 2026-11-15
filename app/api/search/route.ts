@@ -15,6 +15,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
   source?: string;
+  titleMatch?: boolean;
 };
 
 type OpenAlexWork = {
@@ -140,6 +141,73 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
       results.push({ paperId: link, title: match[2].replace(/\s+/g, " ").trim(), abstract: null, year: null, authors: [], url: link, fieldsOfStudy: ["Economics"], source: "RePEc" });
     }
     return results;
+  } catch {
+    return [];
+  }
+}
+
+// Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
+const tokens = (text: string) => (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+
+
+function toPaper(work: OpenAlexWork): SemanticPaper {
+  const fields: string[] = [];
+  for (const t of work.topics ?? []) {
+    const name = t.field?.display_name;
+    if (name && !fields.includes(name)) fields.push(name);
+  }
+  return {
+    paperId: work.id,
+    title: work.title ?? undefined,
+    abstract: rebuildAbstract(work.abstract_inverted_index),
+    year: work.publication_year ?? null,
+    authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+    url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+    fieldsOfStudy: fields,
+    source: "OpenAlex",
+    titleMatch: true,
+  };
+}
+
+async function titleSearch(query: string): Promise<SemanticPaper[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  if (!apiKey) return [];
+  const want = tokens(query);
+  if (want.length < 2) return [];
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("filter", `title.search:${want.join(" ")}`);
+  url.searchParams.set("sort", "cited_by_count:desc");
+  url.searchParams.set("per_page", "8");
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { results?: OpenAlexWork[] };
+  const out: SemanticPaper[] = [];
+  for (const work of data.results ?? []) {
+    if (!work.id || !work.title) continue;
+    const have = tokens(work.title);
+    const hit = want.filter((w) => have.some((h) => h === w || h.startsWith(w) || w.startsWith(h))).length;
+    if (hit / want.length < 0.8) continue;
+    out.push(toPaper(work));
+  }
+  return out;
+}
+
+async function doiLookup(question: string): Promise<SemanticPaper[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  const match = question.match(/10\.\d{4,9}\/[^\s"<>]+/);
+  if (!apiKey || !match) return [];
+  const doi = match[0].replace(/[.,;)\]]+$/, "");
+  const url = new URL(`https://api.openalex.org/works/https://doi.org/${doi}`);
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  try {
+    const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) return [];
+    const work = (await response.json()) as OpenAlexWork;
+    if (!work.id || !work.title) return [];
+    return [toPaper(work)];
   } catch {
     return [];
   }
