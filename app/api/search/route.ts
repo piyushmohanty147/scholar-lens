@@ -15,6 +15,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
   source?: string;
+  titleMatch?: boolean;
 };
 
 type OpenAlexWork = {
@@ -86,14 +87,20 @@ function rebuildAbstract(index?: Record<string, number[]> | null): string | null
   return text ? text.slice(0, 1500) : null;
 }
 
-async function openAlexSearch(query: string, finance = false): Promise<SemanticPaper[]> {
+async function openAlexSearch(query: string, finance = false, titleOnly = false): Promise<SemanticPaper[]> {
   const apiKey = process.env.OPENALEX_API_KEY;
   if (!apiKey) throw new Error("OpenAlex key is not set.");
 
   const url = new URL("https://api.openalex.org/works");
-  url.searchParams.set("search", query);
-  url.searchParams.set("filter", finance ? "has_abstract:true,primary_topic.field.id:20|14" : "has_abstract:true");
-  url.searchParams.set("per_page", "15");
+  if (titleOnly) {
+    url.searchParams.set("filter", "title.search:" + query);
+    url.searchParams.set("sort", "cited_by_count:desc");
+    url.searchParams.set("per_page", "8");
+  } else {
+    url.searchParams.set("search", query);
+    url.searchParams.set("filter", finance ? "has_abstract:true,primary_topic.field.id:20|14" : "has_abstract:true");
+    url.searchParams.set("per_page", "15");
+  }
   url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
   url.searchParams.set("api_key", apiKey);
 
@@ -118,6 +125,7 @@ async function openAlexSearch(query: string, finance = false): Promise<SemanticP
         url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
         fieldsOfStudy: Array.from(new Set(fields)),
         source: "OpenAlex",
+        titleMatch: titleOnly,
       };
     });
 }
@@ -140,6 +148,60 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
       results.push({ paperId: link, title: match[2].replace(/\s+/g, " ").trim(), abstract: null, year: null, authors: [], url: link, fieldsOfStudy: ["Economics"], source: "RePEc" });
     }
     return results;
+  } catch {
+    return [];
+  }
+}
+
+
+// Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
+const tokens = (text: string) => (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+
+
+function toPaper(work: OpenAlexWork): SemanticPaper {
+  const fields: string[] = [];
+  for (const t of work.topics ?? []) {
+    const name = t.field?.display_name;
+    if (name && !fields.includes(name)) fields.push(name);
+  }
+  return {
+    paperId: work.id,
+    title: work.title ?? undefined,
+    abstract: rebuildAbstract(work.abstract_inverted_index),
+    year: work.publication_year ?? null,
+    authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+    url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+    fieldsOfStudy: fields,
+    source: "OpenAlex",
+    titleMatch: true,
+  };
+}
+
+async function titleSearch(query: string): Promise<SemanticPaper[]> {
+  const want = tokens(query);
+  if (want.length < 2) return [];
+  const found = await openAlexSearch(want.join(" "), false, true);
+  return found.filter((paper) => {
+    const have = tokens(paper.title ?? "");
+    const hit = want.filter((w) => have.some((h) => h === w || h.startsWith(w) || w.startsWith(h))).length;
+    return hit / want.length >= 0.8;
+  });
+}
+
+async function doiLookup(question: string): Promise<SemanticPaper[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  const match = question.match(/10\.\d{4,9}\/[^\s"<>]+/);
+  if (!apiKey || !match) return [];
+  const doi = match[0].replace(/[.,;)\]]+$/, "");
+  const url = new URL(`https://api.openalex.org/works/https://doi.org/${doi}`);
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  try {
+    const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) return [];
+    const work = (await response.json()) as OpenAlexWork;
+    if (!work.id || !work.title) return [];
+    return [toPaper(work)];
   } catch {
     return [];
   }
@@ -180,10 +242,12 @@ async function planQueries(question: string): Promise<string[]> {
 async function findCandidates(question: string, query: string, finance: boolean): Promise<SemanticPaper[]> {
   const hasOpenAlex = Boolean(process.env.OPENALEX_API_KEY);
   const jobs: Promise<SemanticPaper[]>[] = [];
+  if (hasOpenAlex) { jobs.push(doiLookup(question)); jobs.push(titleSearch(question)); }
   if (hasOpenAlex) jobs.push(openAlexSearch(query, finance));
   jobs.push(semanticScholarSearch(query, finance));
   if (finance) jobs.push(repecSearch(query));
   const baseCount = jobs.length;
+  const leading = hasOpenAlex ? 2 : 0;
 
   // The extra phrasings are planned and searched alongside the main searches.
   if (hasOpenAlex) {
@@ -196,7 +260,7 @@ async function findCandidates(question: string, query: string, finance: boolean)
 
   const settled = await Promise.allSettled(jobs);
   const merged = mergeUnique(settled.map((r) => (r.status === "fulfilled" ? r.value : [])));
-  if (settled.slice(0, baseCount).every((r) => r.status === "rejected") && merged.length === 0) {
+  if (settled.slice(leading, baseCount).every((r) => r.status === "rejected") && merged.length === 0) {
     throw new Error("Could not retrieve papers right now. Please try again in a moment.");
   }
   return merged;
@@ -361,7 +425,7 @@ export async function POST(request: Request) {
     }
 
     const query = searchTerms(question) || question;
-    const candidates = (await findCandidates(question, query, finance)).slice(0, 20);
+    const candidates = (await findCandidates(question, query, finance)).slice(0, 30);
     if (!candidates.length) {
       await recordUsage(request, "search");
       return NextResponse.json({ papers: [] });
@@ -373,15 +437,19 @@ export async function POST(request: Request) {
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
     const ranked = rankings.length > 0;
 
-    const papers = candidates.map((paper) => {
+    const all = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
         fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
-        score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
+        score: paper.titleMatch ? 10 : ranking?.score ?? (ranked ? 0 : 6), explanation: paper.titleMatch && !ranking?.explanation ? "Matches the title you typed." : ranking?.explanation ?? "",
       };
-    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
+    });
+    // Strong matches first. If fewer than 10 are strong, add the next best (score 4 to 5) so the list is not empty or thin.
+    const strong = all.filter((p) => p.score >= 6).sort((a, b) => b.score - a.score);
+    const softer = strong.length < 10 ? all.filter((p) => p.score >= 4 && p.score < 6).sort((a, b) => b.score - a.score).slice(0, 10 - strong.length) : [];
+    const papers = [...strong, ...softer].slice(0, 20);
 
     if (ranked) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
