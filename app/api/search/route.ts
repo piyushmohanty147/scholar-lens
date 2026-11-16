@@ -15,6 +15,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
   source?: string;
+  titleMatch?: boolean;
 };
 
 type OpenAlexWork = {
@@ -373,15 +374,19 @@ export async function POST(request: Request) {
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
     const ranked = rankings.length > 0;
 
-    const papers = candidates.map((paper) => {
+    const all = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
         fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
-        score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
+        score: paper.titleMatch ? 10 : ranking?.score ?? (ranked ? 0 : 6), explanation: paper.titleMatch && !ranking?.explanation ? "Matches the title you typed." : ranking?.explanation ?? "",
       };
-    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
+    });
+    // Strong matches first. If fewer than 10 are strong, add the next best (score 4 to 5) so the list is not empty or thin.
+    const strong = all.filter((p) => p.score >= 6).sort((a, b) => b.score - a.score);
+    const softer = strong.length < 10 ? all.filter((p) => p.score >= 4 && p.score < 6).sort((a, b) => b.score - a.score).slice(0, 10 - strong.length) : [];
+    const papers = [...strong, ...softer].slice(0, 20);
 
     if (ranked) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
