@@ -214,6 +214,85 @@ async function doiLookup(question: string): Promise<SemanticPaper[]> {
   }
 }
 
+// Two more free sources so far more papers are found: Crossref (journal articles and books by DOI) and Europe PMC (life sciences and preprints).
+type CrossrefItem = {
+  DOI?: string;
+  URL?: string;
+  title?: string[];
+  abstract?: string;
+  author?: { given?: string; family?: string }[];
+  issued?: { "date-parts"?: number[][] };
+  subject?: string[];
+};
+
+async function crossrefSearch(query: string): Promise<SemanticPaper[]> {
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query", query);
+  url.searchParams.set("rows", "10");
+  url.searchParams.set("select", "DOI,URL,title,abstract,author,issued,subject");
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { message?: { items?: CrossrefItem[] } };
+  const items: CrossrefItem[] = data.message?.items ?? [];
+  const out: SemanticPaper[] = [];
+  for (const item of items) {
+    const title: string | undefined = item.title?.[0];
+    if (!item.DOI || !title) continue;
+    const names: { name?: string }[] = (item.author ?? []).map((a) => ({ name: [a.given, a.family].filter(Boolean).join(" ") }));
+    const year: number | null = item.issued?.["date-parts"]?.[0]?.[0] ?? null;
+    out.push({
+      paperId: "doi:" + item.DOI,
+      title,
+      abstract: item.abstract ? item.abstract.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1500) : null,
+      year,
+      authors: names,
+      url: item.URL ?? "https://doi.org/" + item.DOI,
+      fieldsOfStudy: item.subject ?? [],
+      source: "Crossref",
+    });
+  }
+  return out;
+}
+
+type EuropePmcItem = {
+  id?: string;
+  source?: string;
+  title?: string;
+  authorString?: string;
+  pubYear?: string;
+  abstractText?: string;
+  doi?: string;
+};
+
+async function europePmcSearch(query: string): Promise<SemanticPaper[]> {
+  const url = new URL("https://www.ebi.ac.uk/europepmc/webservices/rest/search");
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("resultType", "core");
+  url.searchParams.set("pageSize", "10");
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { resultList?: { result?: EuropePmcItem[] } };
+  const items: EuropePmcItem[] = data.resultList?.result ?? [];
+  const out: SemanticPaper[] = [];
+  for (const item of items) {
+    if (!item.id || !item.title) continue;
+    const names: { name?: string }[] = (item.authorString ?? "").split(",").map((n) => ({ name: n.trim().replace(/\.$/, "") })).filter((a) => a.name);
+    const year = item.pubYear ? Number(item.pubYear) : null;
+    out.push({
+      paperId: "epmc:" + (item.source ?? "") + item.id,
+      title: item.title.replace(/<[^>]+>/g, "").replace(/\.$/, ""),
+      abstract: item.abstractText ? item.abstractText.replace(/<[^>]+>/g, " ").slice(0, 1500) : null,
+      year: year !== null && Number.isFinite(year) ? year : null,
+      authors: names,
+      url: item.doi ? "https://doi.org/" + item.doi : "https://europepmc.org/article/" + (item.source ?? "MED") + "/" + item.id,
+      fieldsOfStudy: [],
+      source: "Europe PMC",
+    });
+  }
+  return out;
+}
+
 function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
   const seen = new Set<string>();
   const merged: SemanticPaper[] = [];
@@ -252,6 +331,8 @@ async function findCandidates(question: string, query: string, finance: boolean)
   if (hasOpenAlex) { jobs.push(doiLookup(question)); jobs.push(titleSearch(question)); }
   if (hasOpenAlex) jobs.push(openAlexSearch(query, finance));
   jobs.push(semanticScholarSearch(query, finance));
+  jobs.push(crossrefSearch(query));
+  jobs.push(europePmcSearch(query));
   if (finance) jobs.push(repecSearch(query));
   const baseCount = jobs.length;
   const leading = hasOpenAlex ? 2 : 0;
