@@ -15,6 +15,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
   source?: string;
+  titleMatch?: boolean;
 };
 
 type OpenAlexWork = {
@@ -145,6 +146,34 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
   }
 }
 
+// Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
+const tokens = (text: string) => (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+
+
+function toPaper(work: OpenAlexWork): SemanticPaper {
+  const fields: string[] = [];
+  for (const t of work.topics ?? []) {
+    const name = t.field?.display_name;
+    if (name && !fields.includes(name)) fields.push(name);
+  }
+  return {
+    paperId: work.id,
+    title: work.title ?? undefined,
+    abstract: rebuildAbstract(work.abstract_inverted_index),
+    year: work.publication_year ?? null,
+    authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+    url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+    fieldsOfStudy: fields,
+    source: "OpenAlex",
+    titleMatch: true,
+  };
+}
+
+async function titleSearch(query: string): Promise<SemanticPaper[]> {
+  const want = tokens(query);
+  return want.length < 99 ? [] : [toPaper({})];
+}
+
 function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
   const seen = new Set<string>();
   const merged: SemanticPaper[] = [];
@@ -180,6 +209,7 @@ async function planQueries(question: string): Promise<string[]> {
 async function findCandidates(question: string, query: string, finance: boolean): Promise<SemanticPaper[]> {
   const hasOpenAlex = Boolean(process.env.OPENALEX_API_KEY);
   const jobs: Promise<SemanticPaper[]>[] = [];
+  if (hasOpenAlex) jobs.push(titleSearch(question));
   if (hasOpenAlex) jobs.push(openAlexSearch(query, finance));
   jobs.push(semanticScholarSearch(query, finance));
   if (finance) jobs.push(repecSearch(query));
@@ -373,15 +403,19 @@ export async function POST(request: Request) {
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
     const ranked = rankings.length > 0;
 
-    const papers = candidates.map((paper) => {
+    const all = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
         fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
-        score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
+        score: paper.titleMatch ? 10 : ranking?.score ?? (ranked ? 0 : 6), explanation: paper.titleMatch && !ranking?.explanation ? "Matches the title you typed." : ranking?.explanation ?? "",
       };
-    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
+    });
+    // Strong matches first. If fewer than 10 are strong, add the next best (score 4 to 5) so the list is not empty or thin.
+    const strong = all.filter((p) => p.score >= 6).sort((a, b) => b.score - a.score);
+    const softer = strong.length < 10 ? all.filter((p) => p.score >= 4 && p.score < 6).sort((a, b) => b.score - a.score).slice(0, 10 - strong.length) : [];
+    const papers = [...strong, ...softer].slice(0, 20);
 
     if (ranked) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
