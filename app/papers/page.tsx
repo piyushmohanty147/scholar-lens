@@ -343,7 +343,7 @@ export default function Home() {
       })}
 
       {author?.hasMore && !loading && (
-        <p className="msg"><button type="button" className="sum" onClick={() => search(asked, { authorId: author.author.id, page: author.page + 1 })}>Show 25 more papers</button></p>
+        <p className="msg"><button type="button" className="sum" onClick={() => search(asked, { authorId: author.author.id, page: author.page + 1 })}>Show 50 more papers</button></p>
       )}
     </main>
   );

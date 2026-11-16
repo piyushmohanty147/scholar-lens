@@ -390,7 +390,7 @@ async function rankPapers(question: string, candidates: SemanticPaper[], finance
 // "papers by Gary King" or just "Gary King": look the person up in OpenAlex and list their own works,
 // most cited first, instead of matching the name words against paper titles.
 type AuthorHit = { id: string; name: string; institution: string; worksCount: number; citedBy: number };
-const AUTHOR_PAGE = 25;
+const AUTHOR_PAGE = 50;
 
 function plain(text: string) {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
