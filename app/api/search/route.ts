@@ -15,6 +15,7 @@ type SemanticPaper = {
   url?: string | null;
   fieldsOfStudy?: string[] | null;
   source?: string;
+  titleMatch?: boolean;
 };
 
 type OpenAlexWork = {
@@ -145,6 +146,153 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
   }
 }
 
+
+// Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
+const tokens = (text: string): string[] => Array.from(text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+
+
+function toPaper(work: OpenAlexWork): SemanticPaper {
+  const fields: string[] = [];
+  for (const t of work.topics ?? []) {
+    const name = t.field?.display_name;
+    if (name && !fields.includes(name)) fields.push(name);
+  }
+  return {
+    paperId: work.id,
+    title: work.title ?? undefined,
+    abstract: rebuildAbstract(work.abstract_inverted_index),
+    year: work.publication_year ?? null,
+    authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+    url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+    fieldsOfStudy: fields,
+    source: "OpenAlex",
+    titleMatch: true,
+  };
+}
+
+async function titleSearch(query: string): Promise<SemanticPaper[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  if (!apiKey) return [];
+  const want = tokens(query);
+  if (want.length < 2) return [];
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("filter", `title.search:${want.join(" ")}`);
+  url.searchParams.set("sort", "cited_by_count:desc");
+  url.searchParams.set("per_page", "8");
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { results?: OpenAlexWork[] };
+  const out: SemanticPaper[] = [];
+  for (const work of data.results ?? []) {
+    if (!work.id || !work.title) continue;
+    const have = tokens(work.title);
+    const hit = want.filter((w) => have.some((h) => h === w || h.startsWith(w) || w.startsWith(h))).length;
+    if (hit / want.length < 0.8) continue;
+    out.push(toPaper(work));
+  }
+  return out;
+}
+
+async function doiLookup(question: string): Promise<SemanticPaper[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  const match = question.match(/10\.\d{4,9}\/[^\s"<>]+/);
+  if (!apiKey || !match) return [];
+  const doi = match[0].replace(/[.,;)\]]+$/, "");
+  const url = new URL(`https://api.openalex.org/works/https://doi.org/${doi}`);
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  try {
+    const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) return [];
+    const work = (await response.json()) as OpenAlexWork;
+    if (!work.id || !work.title) return [];
+    return [toPaper(work)];
+  } catch {
+    return [];
+  }
+}
+
+// Two more free sources so far more papers are found: Crossref (journal articles and books by DOI) and Europe PMC (life sciences and preprints).
+type CrossrefItem = {
+  DOI?: string;
+  URL?: string;
+  title?: string[];
+  abstract?: string;
+  author?: { given?: string; family?: string }[];
+  issued?: { "date-parts"?: number[][] };
+  subject?: string[];
+};
+
+async function crossrefSearch(query: string): Promise<SemanticPaper[]> {
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query", query);
+  url.searchParams.set("rows", "10");
+  url.searchParams.set("select", "DOI,URL,title,abstract,author,issued,subject");
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { message?: { items?: CrossrefItem[] } };
+  const items: CrossrefItem[] = data.message?.items ?? [];
+  const out: SemanticPaper[] = [];
+  for (const item of items) {
+    const title: string | undefined = item.title?.[0];
+    if (!item.DOI || !title) continue;
+    const names: { name?: string }[] = (item.author ?? []).map((a) => ({ name: [a.given, a.family].filter(Boolean).join(" ") }));
+    const year: number | null = item.issued?.["date-parts"]?.[0]?.[0] ?? null;
+    out.push({
+      paperId: "doi:" + item.DOI,
+      title,
+      abstract: item.abstract ? item.abstract.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1500) : null,
+      year,
+      authors: names,
+      url: item.URL ?? "https://doi.org/" + item.DOI,
+      fieldsOfStudy: item.subject ?? [],
+      source: "Crossref",
+    });
+  }
+  return out;
+}
+
+type EuropePmcItem = {
+  id?: string;
+  source?: string;
+  title?: string;
+  authorString?: string;
+  pubYear?: string;
+  abstractText?: string;
+  doi?: string;
+};
+
+async function europePmcSearch(query: string): Promise<SemanticPaper[]> {
+  const url = new URL("https://www.ebi.ac.uk/europepmc/webservices/rest/search");
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("resultType", "core");
+  url.searchParams.set("pageSize", "10");
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { resultList?: { result?: EuropePmcItem[] } };
+  const items: EuropePmcItem[] = data.resultList?.result ?? [];
+  const out: SemanticPaper[] = [];
+  for (const item of items) {
+    if (!item.id || !item.title) continue;
+    const names: { name?: string }[] = (item.authorString ?? "").split(",").map((n) => ({ name: n.trim().replace(/\.$/, "") })).filter((a) => a.name);
+    const year = item.pubYear ? Number(item.pubYear) : null;
+    out.push({
+      paperId: "epmc:" + (item.source ?? "") + item.id,
+      title: item.title.replace(/<[^>]+>/g, "").replace(/\.$/, ""),
+      abstract: item.abstractText ? item.abstractText.replace(/<[^>]+>/g, " ").slice(0, 1500) : null,
+      year: year !== null && Number.isFinite(year) ? year : null,
+      authors: names,
+      url: item.doi ? "https://doi.org/" + item.doi : "https://europepmc.org/article/" + (item.source ?? "MED") + "/" + item.id,
+      fieldsOfStudy: [],
+      source: "Europe PMC",
+    });
+  }
+  return out;
+}
+
 function mergeUnique(lists: SemanticPaper[][]): SemanticPaper[] {
   const seen = new Set<string>();
   const merged: SemanticPaper[] = [];
@@ -180,10 +328,14 @@ async function planQueries(question: string): Promise<string[]> {
 async function findCandidates(question: string, query: string, finance: boolean): Promise<SemanticPaper[]> {
   const hasOpenAlex = Boolean(process.env.OPENALEX_API_KEY);
   const jobs: Promise<SemanticPaper[]>[] = [];
+  if (hasOpenAlex) { jobs.push(doiLookup(question)); jobs.push(titleSearch(question)); }
   if (hasOpenAlex) jobs.push(openAlexSearch(query, finance));
   jobs.push(semanticScholarSearch(query, finance));
+  jobs.push(crossrefSearch(query));
+  jobs.push(europePmcSearch(query));
   if (finance) jobs.push(repecSearch(query));
   const baseCount = jobs.length;
+  const leading = hasOpenAlex ? 2 : 0;
 
   // The extra phrasings are planned and searched alongside the main searches.
   if (hasOpenAlex) {
@@ -196,7 +348,7 @@ async function findCandidates(question: string, query: string, finance: boolean)
 
   const settled = await Promise.allSettled(jobs);
   const merged = mergeUnique(settled.map((r) => (r.status === "fulfilled" ? r.value : [])));
-  if (settled.slice(0, baseCount).every((r) => r.status === "rejected") && merged.length === 0) {
+  if (settled.slice(leading, baseCount).every((r) => r.status === "rejected") && merged.length === 0) {
     throw new Error("Could not retrieve papers right now. Please try again in a moment.");
   }
   return merged;
@@ -233,17 +385,125 @@ async function rankPapers(question: string, candidates: SemanticPaper[], finance
   });
 }
 
+
+// ---------- Author search ----------
+// "papers by Gary King" or just "Gary King": look the person up in OpenAlex and list their own works,
+// most cited first, instead of matching the name words against paper titles.
+type AuthorHit = { id: string; name: string; institution: string; worksCount: number; citedBy: number };
+const AUTHOR_PAGE = 25;
+
+function plain(text: string) {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Returns a person's name if the question looks like a request for one author's papers.
+function authorNameFrom(question: string): string | null {
+  const q = question.trim().replace(/\s+/g, " ");
+  const named = q.match(/(?:papers?|publications?|articles?|works?|research|studies)\s+(?:written\s+)?(?:by|of|from)\s+(?:prof(?:essor)?\.?\s+|dr\.?\s+)?([\p{L}.'-]+(?:\s+[\p{L}.'-]+){1,3})\s*[?.]?$/iu);
+  if (named) return named[1];
+  const possessive = q.match(/^(?:prof(?:essor)?\.?\s+|dr\.?\s+)?([\p{L}.'-]+(?:\s+[\p{L}.'-]+){1,2})(?:'s|\u2019s)\s+(?:papers?|publications?|research|work|articles?)\s*[?.]?$/iu);
+  if (possessive) return possessive[1];
+  const bare = q.match(/^(?:prof(?:essor)?\.?\s+|dr\.?\s+)?(\p{Lu}[\p{L}.'-]+(?:\s+\p{Lu}[\p{L}.'-]+){1,2})$/u);
+  return bare ? bare[1] : null;
+}
+
+async function findAuthors(name: string): Promise<AuthorHit[]> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  if (!apiKey) return [];
+  const url = new URL("https://api.openalex.org/authors");
+  url.searchParams.set("search", name);
+  url.searchParams.set("per_page", "15");
+  url.searchParams.set("select", "id,display_name,works_count,cited_by_count,last_known_institutions");
+  url.searchParams.set("api_key", apiKey);
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { results?: { id?: string; display_name?: string; works_count?: number; cited_by_count?: number; last_known_institutions?: { display_name?: string }[] }[] };
+  const want = plain(name).split(" ").filter(Boolean);
+  if (want.length < 2) return [];
+  return (data.results ?? [])
+    .filter((a) => a.id && a.display_name)
+    .map((a) => ({ id: a.id!, name: a.display_name!, institution: a.last_known_institutions?.[0]?.display_name ?? "", worksCount: a.works_count ?? 0, citedBy: a.cited_by_count ?? 0 }))
+    .filter((a) => {
+      const have = plain(a.name).split(" ").filter(Boolean);
+      return have.length >= 2 && have[0] === want[0] && have[have.length - 1] === want[want.length - 1] && a.worksCount >= 3;
+    })
+    .sort((a, b) => b.citedBy - a.citedBy);
+}
+
+async function authorWorks(authorId: string, page: number): Promise<{ papers: SemanticPaper[]; total: number }> {
+  const apiKey = process.env.OPENALEX_API_KEY;
+  if (!apiKey) throw new Error("OpenAlex key is not set.");
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("filter", `author.id:${authorId},type:article|preprint|book|book-chapter|review`);
+  url.searchParams.set("sort", "cited_by_count:desc");
+  url.searchParams.set("per_page", String(AUTHOR_PAGE));
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("select", "id,title,publication_year,authorships,abstract_inverted_index,doi,primary_location,topics");
+  url.searchParams.set("api_key", apiKey);
+  const response = await fetchWithRetry(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) throw new Error("OpenAlex could not retrieve this author's papers right now.");
+  const data = (await response.json()) as { results?: OpenAlexWork[]; meta?: { count?: number } };
+  const papers = (data.results ?? [])
+    .filter((work) => work.id && work.title)
+    .map((work) => ({
+      paperId: work.id,
+      title: work.title ?? undefined,
+      abstract: rebuildAbstract(work.abstract_inverted_index),
+      year: work.publication_year ?? null,
+      authors: (work.authorships ?? []).map((a) => ({ name: a.author?.display_name })),
+      url: work.doi ?? work.primary_location?.landing_page_url ?? work.id ?? null,
+      fieldsOfStudy: Array.from(new Set((work.topics ?? []).map((t) => t.field?.display_name).filter((n): n is string => Boolean(n)))),
+      source: "OpenAlex",
+    }));
+  return { papers, total: data.meta?.count ?? papers.length };
+}
+
+function shapePapers(list: SemanticPaper[]) {
+  const seen = new Set<string>();
+  return list.flatMap((paper) => {
+    const key = (paper.title ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!paper.paperId || !paper.title || seen.has(key)) return [];
+    seen.add(key);
+    return [{
+      paperId: paper.paperId, title: paper.title, year: paper.year ?? null, url: paper.url ?? null,
+      authors: (paper.authors ?? []).map((a) => a.name).filter((n): n is string => Boolean(n)),
+      fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
+      score: 10, explanation: "",
+    }];
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     if (!(await allow(ip, 30, "search"))) {
       return NextResponse.json({ error: "You've reached the free limit. Please try again later." }, { status: 429 });
     }
-    const body = await request.json() as { question?: unknown; field?: unknown };
+    const body = await request.json() as { question?: unknown; field?: unknown; authorId?: unknown; page?: unknown };
     const finance = body.field === "finance";
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question) return NextResponse.json({ error: "A research question is required." }, { status: 400 });
     if (question.length > 1000) return NextResponse.json({ error: "Keep your research question under 1,000 characters." }, { status: 400 });
+
+    // Author search: a chosen author (authorId) or a question that names a person we can find.
+    const page = typeof body.page === "number" && body.page >= 1 && body.page <= 200 ? Math.floor(body.page) : 1;
+    const pickedId = typeof body.authorId === "string" && /^https:\/\/openalex\.org\/A\d+$/.test(body.authorId) ? body.authorId : "";
+    const personName = pickedId ? authorNameFrom(question) ?? question : authorNameFrom(question);
+    if (personName) {
+      let hits: AuthorHit[] = [];
+      try { hits = await findAuthors(personName); } catch { hits = []; }
+      const chosen = pickedId ? hits.find((h) => h.id === pickedId) ?? { id: pickedId, name: personName, institution: "", worksCount: 0, citedBy: 0 } : hits[0];
+      if (chosen) {
+        const { papers: works, total } = await authorWorks(chosen.id, page);
+        await recordUsage(request, "search");
+        return NextResponse.json({
+          papers: shapePapers(works),
+          author: chosen,
+          others: hits.filter((h) => h.id !== chosen.id).slice(0, 4),
+          total, page, hasMore: page * AUTHOR_PAGE < total,
+        });
+      }
+    }
 
     const cacheKey = `${finance ? "f" : "a"}|${question.toLowerCase()}`;
     const hit = cache.get(cacheKey);
@@ -253,7 +513,7 @@ export async function POST(request: Request) {
     }
 
     const query = searchTerms(question) || question;
-    const candidates = (await findCandidates(question, query, finance)).slice(0, 20);
+    const candidates = (await findCandidates(question, query, finance)).slice(0, 30);
     if (!candidates.length) {
       await recordUsage(request, "search");
       return NextResponse.json({ papers: [] });
@@ -265,15 +525,19 @@ export async function POST(request: Request) {
     const rankById = new Map(rankings.map((ranking) => [ranking.id, ranking]));
     const ranked = rankings.length > 0;
 
-    const papers = candidates.map((paper) => {
+    const all = candidates.map((paper) => {
       const ranking = rankById.get(paper.paperId!);
       return {
         paperId: paper.paperId!, title: paper.title!, year: paper.year ?? null, url: paper.url ?? null,
         authors: (paper.authors ?? []).map((author) => author.name).filter((name): name is string => Boolean(name)),
         fieldsOfStudy: paper.fieldsOfStudy ?? [], source: paper.source ?? "", abstract: (paper.abstract ?? "").slice(0, 2000),
-        score: ranking?.score ?? (ranked ? 0 : 6), explanation: ranking?.explanation ?? "",
+        score: paper.titleMatch ? 10 : ranking?.score ?? (ranked ? 0 : 6), explanation: paper.titleMatch && !ranking?.explanation ? "Matches the title you typed." : ranking?.explanation ?? "",
       };
-    }).filter((paper) => paper.score >= 6).sort((a, b) => b.score - a.score).slice(0, 15);
+    });
+    // Strong matches first. If fewer than 10 are strong, add the next best (score 4 to 5) so the list is not empty or thin.
+    const strong = all.filter((p) => p.score >= 6).sort((a, b) => b.score - a.score);
+    const softer = strong.length < 10 ? all.filter((p) => p.score >= 4 && p.score < 6).sort((a, b) => b.score - a.score).slice(0, 10 - strong.length) : [];
+    const papers = [...strong, ...softer].slice(0, 20);
 
     if (ranked) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value as string);
