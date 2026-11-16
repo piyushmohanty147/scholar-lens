@@ -148,7 +148,7 @@ async function repecSearch(query: string): Promise<SemanticPaper[]> {
 
 
 // Papers whose TITLE matches what was typed (a few words of a title find that paper), and DOI lookup.
-const tokens = (text: string) => (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+const tokens = (text: string): string[] => Array.from(text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
 
 
 function toPaper(work: OpenAlexWork): SemanticPaper {
