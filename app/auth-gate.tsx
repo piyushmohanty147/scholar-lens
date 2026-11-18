@@ -7,6 +7,7 @@ import { SiteHeader } from "./site-header";
 import { usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "../lib/supabase";
+import { LEGAL_UPDATED } from "../lib/site";
 
 type Limit = { message: string; kind: string; plan: string };
 type Rec = Record<string, unknown>;
@@ -154,6 +155,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
+
+  // Keeps a record of when each person accepted the Terms and Privacy Policy (and which version).
+  // If the table does not exist yet, this quietly does nothing.
+  useEffect(() => {
+    const user = session?.user;
+    if (!user) return;
+    const flag = "sl_consent_" + LEGAL_UPDATED;
+    try { if (localStorage.getItem(flag) === user.id) return; } catch { /* storage unavailable */ }
+    supabase.from("consent_log").insert({ user_id: user.id, policy_version: LEGAL_UPDATED }).then(({ error }) => {
+      if (error && error.code !== "23505") return;
+      try { localStorage.setItem(flag, user.id); } catch { /* storage unavailable */ }
+    });
+  }, [session]);
 
   // The daily-limit window closes with Escape.
   useEffect(() => {

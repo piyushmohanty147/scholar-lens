@@ -185,3 +185,19 @@ begin
 end $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+
+-- 11. Consent record: when each signed-in user accepted the Terms and Privacy Policy, and which version.
+-- Users can add and see only their own rows. Rows are removed when the account is deleted.
+create table if not exists public.consent_log (
+  id bigserial primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  policy_version text not null,
+  accepted_at timestamptz not null default now(),
+  unique (user_id, policy_version)
+);
+alter table public.consent_log enable row level security;
+drop policy if exists "add own consent" on public.consent_log;
+create policy "add own consent" on public.consent_log for insert with check (auth.uid() = user_id);
+drop policy if exists "read own consent" on public.consent_log;
+create policy "read own consent" on public.consent_log for select using (auth.uid() = user_id);
