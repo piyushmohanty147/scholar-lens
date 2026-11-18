@@ -17,7 +17,7 @@ export default function Page() {
         <li><strong>Newsletter:</strong> if you subscribe to research-trend emails, we keep your email address to send them. You can unsubscribe at any time by emailing us.</li>
         <li><strong>Usage counts:</strong> how many searches, deep dives and outlooks you run each day, so we can apply daily limits.</li>
         <li><strong>Payment records:</strong> if you buy a paid plan, we keep the order ID, amount, currency and status. Your card, UPI or bank details are handled by our payment provider and are never stored by us.</li>
-        <li><strong>Technical data:</strong> basic request data such as IP address, which our hosting provider logs and which we use to prevent abuse.</li>
+        <li><strong>Technical data:</strong> basic request data such as IP address, which our hosting provider logs. We also keep a short-lived count of requests per IP address in our database to stop abuse and automated misuse.</li>
       </ul>
 
       <h2>How we use it</h2>
@@ -33,8 +33,15 @@ export default function Page() {
       <h2>How long we keep data</h2>
       <p>We keep your account and usage records while your account is active. You can delete saved outlooks and papers yourself in My library, and you can ask us to delete your account and associated data at any time (see below). We may keep payment records as long as required for accounting and legal reasons.</p>
 
-      <h2>Your choices</h2>
-      <p>You can delete your account and everything saved in it yourself from the account menu (Delete my account). You can also ask to access, correct or delete your information by emailing us. We will respond within a reasonable time.</p>
+      <h2>Your choices and rights</h2>
+      <p>You have the right under India&apos;s Digital Personal Data Protection Act, 2023 to: get a summary of the personal data we hold about you and who we share it with; ask us to correct or complete it; ask us to erase it; withdraw your consent at any time; and nominate another person to exercise these rights if you die or cannot act.</p>
+      <p>You can delete your account and everything saved in it yourself from the account menu (Delete my account). Deleting your account withdraws your consent. For anything else, email {CONTACT_EMAIL}. We will reply within 30 days.</p>
+
+      <h2>Complaints</h2>
+      <p>If you are not happy with how we handled your request, email {CONTACT_EMAIL} first so we can fix it. If you are still not satisfied, you can complain to the Data Protection Board of India.</p>
+
+      <h2>If something goes wrong</h2>
+      <p>If a data breach affects your personal data, we will tell you and the Data Protection Board of India as the law requires.</p>
 
       <h2>Children</h2>
       <p>The service is for adults only. You must be 18 or older to create an account. If you believe someone under 18 has given us personal information, contact us and we will delete it.</p>
