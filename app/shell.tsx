@@ -7,7 +7,7 @@ import Papers from "./papers/page";
 import Outlook from "./outlook/page";
 
 const TRUST = [
-  "Every claim links to its source paper",
+  "Results link to the original papers",
   "Open data from OpenAlex and Semantic Scholar",
   "Honest about limits: abstracts, not full texts",
   "Your reports saved to your own library",
