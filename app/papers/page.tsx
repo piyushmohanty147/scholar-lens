@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { HeroArt } from "../hero-art";
 import type { ReactNode } from "react";
 
 type Paper = {
@@ -254,6 +255,7 @@ export default function Home() {
       <div className="tag">AI-powered paper discovery</div>
       <h1>Scholar Lens</h1>
       <p className="sub">Ask a research question. Find the papers that best answer it, then understand each one in depth.</p>
+      {papers === null && !loading && <HeroArt kind="search" />}
 
       <label htmlFor="q">Research question</label>
       <textarea id="q" value={question} onChange={(e) => { setQuestion(e.target.value); setShowSug(true); }} onFocus={() => setShowSug(true)} onBlur={() => setTimeout(() => setShowSug(false), 200)} placeholder="Type a question, a paper title, a DOI or an author's name" />

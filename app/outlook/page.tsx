@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HeroArt } from "../hero-art";
 
 type Item = { point?: string; why?: string; action?: string; sources?: string[]; strength?: string };
 type Report = {
@@ -143,6 +144,7 @@ export default function Outlook() {
       <div className="tag">Project Outlook</div>
       <h1>What could happen next?</h1>
       <p className="sub">Describe your project. Get an evidence-based outlook with opportunities, risks and scenarios.</p>
+      <HeroArt kind="outlook" />
 
       <div className="noprint">
         <strong>I am a…</strong>
