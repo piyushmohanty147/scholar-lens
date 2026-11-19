@@ -7,17 +7,17 @@ import Papers from "./papers/page";
 import Outlook from "./outlook/page";
 
 const TRUST = [
-  "Every claim links to its source paper",
+  "Results link to the original papers",
   "Open data from OpenAlex and Semantic Scholar",
   "Honest about limits: abstracts, not full texts",
   "Your reports saved to your own library",
 ];
 
 const FEATURES = [
-  { t: "Find the right papers", d: "Ask in plain language. Results from several scholarly sources are ranked by how well they answer your actual question." },
-  { t: "Deep dive on any paper", d: "Study design, key findings, limitations, who cites it, related work and a link to the free full text when one exists." },
-  { t: "Project Outlook", d: "Opportunities, risks and scenarios for your project, built from research activity data and recent papers." },
-  { t: "Free trend explorer", d: "Compare how fast two research topics are growing, with fast-growing subtopics and a simple 3-year projection.", href: "/guides/trends" },
+  { k: "papers", t: "Find the right papers", d: "Ask in plain language. Results from several scholarly sources are ranked by how well they answer your actual question." },
+  { k: "dive", t: "Deep dive on any paper", d: "Study design, key findings, limitations, who cites it, related work and a link to the free full text when one exists." },
+  { k: "outlook", t: "Project Outlook", d: "Opportunities, risks and scenarios for your project, built from research activity data and recent papers." },
+  { k: "trend", t: "Free trend explorer", d: "Compare how fast two research topics are growing, with fast-growing subtopics and a simple 3-year projection.", href: "/guides/trends" },
 ];
 
 const STEPS = [
@@ -25,6 +25,19 @@ const STEPS = [
   { n: "2", t: "We gather the evidence", d: "Scholar Lens searches published papers and tracks how research activity changes year by year." },
   { n: "3", t: "Get a clear answer", d: "Ranked papers with deep dives, or an outlook with opportunities, risks and scenarios. Sources are listed in every report." },
 ];
+
+
+// Small line illustrations drawn in code, so there are no image files and no licence questions.
+function Art({ k }: { k: string }) {
+  const common = { width: 56, height: 56, viewBox: "0 0 56 56", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+  if (k === "papers") return (<svg {...common}><rect x="10" y="8" width="26" height="34" rx="3" /><path d="M16 17h14M16 24h14M16 31h8" /><circle cx="38" cy="36" r="8" /><path d="M44 42l6 6" /></svg>);
+  if (k === "dive") return (<svg {...common}><rect x="12" y="6" width="30" height="40" rx="3" /><path d="M19 16h16M19 23h16M19 30h9" /><path d="M10 50c8-6 12 4 20-2s12 2 18-2" /></svg>);
+  if (k === "outlook") return (<svg {...common}><path d="M8 46h40" /><path d="M10 38l12-12 8 8 16-18" /><path d="M38 16h8v8" /></svg>);
+  if (k === "trend") return (<svg {...common}><path d="M8 46h40M8 46V10" /><path d="M14 38l9-9 7 6 14-16" strokeDasharray="1 5" /><rect x="14" y="32" width="6" height="14" rx="1" /><rect x="26" y="24" width="6" height="22" rx="1" /><rect x="38" y="14" width="6" height="32" rx="1" /></svg>);
+  if (k === "1") return (<svg {...common}><path d="M10 14h36v24H28l-8 8v-8H10z" /><path d="M18 22h20M18 29h12" /></svg>);
+  if (k === "2") return (<svg {...common}><circle cx="24" cy="24" r="12" /><path d="M33 33l12 12" /><path d="M19 24h10M24 19v10" /></svg>);
+  return (<svg {...common}><path d="M12 28l10 10 22-22" /><rect x="6" y="6" width="44" height="44" rx="8" /></svg>);
+}
 
 const AUDIENCE = ["Students", "Research teams", "Startups", "Analysts", "Consultants"];
 const BARS = [22, 26, 31, 38, 47, 58, 73, 91];
@@ -78,6 +91,7 @@ export default function Shell() {
         .sx .sxpanel .sl,.sx .sxpanel .ol{padding-top:14px}
 
         .sx .sxsec{font-size:clamp(1.7rem,3.2vw,2.3rem);margin:84px 0 24px}
+        .sx .art{color:var(--link);margin-bottom:10px;line-height:0}
         .sx .sxfeat{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
         .sx .sxfc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;text-decoration:none;color:inherit;display:block}
         .sx .sxfc:hover{border-color:var(--link)}
@@ -155,10 +169,10 @@ export default function Shell() {
           {FEATURES.map((f) =>
             f.href ? (
               <Link className="sxfc link" href={f.href} key={f.t}>
-                <h3>{f.t}</h3><p>{f.d}</p><span className="go">Try it free →</span>
+                <div className="art"><Art k={f.k} /></div><h3>{f.t}</h3><p>{f.d}</p><span className="go">Try it free →</span>
               </Link>
             ) : (
-              <div className="sxfc" key={f.t}><h3>{f.t}</h3><p>{f.d}</p></div>
+              <div className="sxfc" key={f.t}><div className="art"><Art k={f.k} /></div><h3>{f.t}</h3><p>{f.d}</p></div>
             ),
           )}
         </div>
@@ -166,7 +180,7 @@ export default function Shell() {
         <h2 className="sxsec">How it works</h2>
         <div className="sxsteps">
           {STEPS.map((s) => (
-            <div className="sxstep" key={s.n}><div className="sxnum">{s.n}</div><h3>{s.t}</h3><p>{s.d}</p></div>
+            <div className="sxstep" key={s.n}><div className="art"><Art k={s.n} /></div><div className="sxnum">{s.n}</div><h3>{s.t}</h3><p>{s.d}</p></div>
           ))}
         </div>
 
@@ -175,7 +189,7 @@ export default function Shell() {
 
         <section className="sxcta">
           <h2>Ask your first question</h2>
-          <p>Free to start. Every answer links back to its sources.</p>
+          <p>Free to start. Results link to the original papers.</p>
           <a className="sxbtn" href="#tool">Get started</a>
         </section>
 

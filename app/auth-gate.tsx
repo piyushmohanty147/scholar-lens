@@ -7,12 +7,13 @@ import { SiteHeader } from "./site-header";
 import { usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "../lib/supabase";
+import { LEGAL_UPDATED } from "../lib/site";
 
 type Limit = { message: string; kind: string; plan: string };
 type Rec = Record<string, unknown>;
 
-const PUBLIC_PATHS = ["/privacy", "/terms", "/refund", "/contact"];
-const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Refunds", "/refund"], ["Contact", "/contact"]];
+const PUBLIC_PATHS = ["/privacy", "/terms", "/cookies", "/refund", "/contact"];
+const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Cookies", "/cookies"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
 // The server keeps the sign-in token in an httpOnly cookie (set by /api/session), so scripts on the page
 // cannot read it. Resolves once the cookie is set or cleared; it never throws.
@@ -155,6 +156,27 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     };
   }, [menuOpen]);
 
+  // Keeps a record of when each person accepted the Terms and Privacy Policy (and which version).
+  // If the table does not exist yet, this quietly does nothing.
+  useEffect(() => {
+    const user = session?.user;
+    if (!user) return;
+    const flag = "sl_consent_" + LEGAL_UPDATED;
+    try { if (localStorage.getItem(flag) === user.id) return; } catch { /* storage unavailable */ }
+    supabase.from("consent_log").insert({ user_id: user.id, policy_version: LEGAL_UPDATED }).then(({ error }) => {
+      if (error && error.code !== "23505") return;
+      try { localStorage.setItem(flag, user.id); } catch { /* storage unavailable */ }
+    });
+  }, [session]);
+
+  // The daily-limit window closes with Escape.
+  useEffect(() => {
+    if (!limit) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLimit(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [limit]);
+
   // Watches replies from our own API and shows the limit window when a daily limit is reached.
   // (Saving to the library now happens on the server, inside the API routes.)
   useEffect(() => {
@@ -296,9 +318,10 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const subscribeBox = (
     <>
       <div className="subrow">
-        <input type="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="you@example.com" />
-        <button className="btn" onClick={subscribe}>Subscribe</button>
+        <input type="email" aria-label="Email address for research-trend emails" autoComplete="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="you@example.com" />
+        <button className="btn" onClick={subscribe}>Subscribe to trend emails</button>
       </div>
+      <p className="msg">By subscribing you agree to receive research-trend emails at this address. Unsubscribe any time by emailing us. See our <Link href="/privacy">Privacy Policy</Link>.</p>
       {subMsg ? <p className="msg">{subMsg}</p> : null}
     </>
   );
@@ -324,7 +347,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               <label className="agree"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> <span>I am 18 or older and I agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.</span></label>
               <button className="btn main" onClick={google} disabled={busy || !agreed}>Continue with Google</button>
               <div className="or">or use your email</div>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <input type="email" aria-label="Email address for your sign-in link" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <button className="btn" onClick={emailLink} disabled={busy || !agreed}>Email me a sign-in link</button>
               {msg ? <p className="msg">{msg}</p> : null}
             </>
@@ -376,8 +399,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
       {limit && (
         <div className="shade" onClick={() => setLimit(null)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <h2>You have reached today&apos;s free limit</h2>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="limit-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="limit-title">You have reached today&apos;s free limit</h2>
             <p>{limit.message}</p>
             <div className="clock">Free uses reset in {reset.left} (at {reset.at})</div>
             <p><strong>Scholar Lens Pro is coming soon:</strong></p>

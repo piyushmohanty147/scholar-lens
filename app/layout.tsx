@@ -28,7 +28,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
-        <AuthGate>{children}</AuthGate>
+        <a className="skip" href="#content">Skip to main content</a>
+        <div id="content" tabIndex={-1} style={{ outline: "none" }}>
+          <AuthGate>{children}</AuthGate>
+        </div>
       </body>
     </html>
   );
