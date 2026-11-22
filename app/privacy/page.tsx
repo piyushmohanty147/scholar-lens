@@ -32,7 +32,8 @@ export default function Page() {
       <p>We store a sign-in cookie so the site knows who you are. Reports you generate may also be saved in your browser on your own device. Clearing your browser data removes those local copies. We do not use advertising or analytics cookies. See our <Link href="/cookies">Cookie Policy</Link>.</p>
 
       <h2>How long we keep data</h2>
-      <p>We keep your account and usage records while your account is active. You can delete saved outlooks and papers yourself in My library, and you can ask us to delete your account and associated data at any time (see below). We may keep payment records as long as required for accounting and legal reasons.</p>
+      <p>We keep your account, saved outlooks, saved papers and usage counts while your account is active. If you delete your account, all of these are deleted straight away (backups held by our database provider may take up to 30 days to clear). Per-IP request counters used to stop abuse are kept for about six hours. Newsletter addresses are kept until you unsubscribe or delete your account. Share links you create expire after 90 days, and you can stop sharing at any time in My library. Reports you generate may also be kept on your own device until you clear them. We may keep payment records as long as required for accounting and legal reasons.</p>
+      <p>Our providers (Supabase, Vercel, Google and others) may process data on servers outside India. India&apos;s law allows this unless the Government restricts a country.</p>
 
       <h2>Your choices and rights</h2>
       <p>You have the right under India&apos;s Digital Personal Data Protection Act, 2023 to: get a summary of the personal data we hold about you and who we share it with; ask us to correct or complete it; ask us to erase it; withdraw your consent at any time; and nominate another person to exercise these rights if you die or cannot act.</p>

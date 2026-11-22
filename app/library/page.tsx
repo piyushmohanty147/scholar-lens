@@ -1,5 +1,6 @@
 "use client";
 
+import { safeUrl } from "../../lib/safeUrl";
 import { useEffect, useState } from "react";
 import { SiteHeader } from "../site-header";
 import { supabase } from "../../lib/supabase";
@@ -225,7 +226,7 @@ export default function Library() {
       {!loading && papers.length === 0 && <p className="m">No saved papers yet. Open a Deep dive on any paper and it will appear here.</p>}
       {papers.map((p) => (
         <div className="card" key={p.paper_id}>
-          <h3>{p.url ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</h3>
+          <h3>{safeUrl(p.url) ? <a href={safeUrl(p.url) ?? "#"} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</h3>
           <div className="m">{[(p.authors ?? []).slice(0, 4).join(", "), p.year, p.venue].filter(Boolean).join(" · ")}</div>
           {p.summary ? (
             <details>

@@ -1,3 +1,4 @@
+import { tooLarge } from "../../../lib/safeUrl";
 import { NextResponse } from "next/server";
 import { allow } from "../../../lib/rateLimit";
 
@@ -186,6 +187,7 @@ async function analyse(query: string, totals: Map<number, number>) {
 
 export async function POST(request: Request) {
   try {
+    if (tooLarge(request, 20_000)) return NextResponse.json({ error: "That request is too large." }, { status: 413 });
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     if (!(await allow(ip, 20, "trends"))) {
       return NextResponse.json({ error: "You have reached the limit for now. Please try again later." }, { status: 429 });
@@ -208,8 +210,7 @@ export async function POST(request: Request) {
     if (empty) return NextResponse.json({ error: `No papers found for "${empty.query}". Try more specific wording.` }, { status: 404 });
 
     return NextResponse.json({ lastYear: LAST_YEAR, topics: results });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not analyse these topics.";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Something went wrong on our side. Please try again in a moment." }, { status: 500 });
   }
 }

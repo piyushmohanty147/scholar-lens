@@ -19,6 +19,22 @@ export async function middleware(req: NextRequest) {
   const pass = () => NextResponse.next({ request: { headers: forwarded } });
 
   if (req.method !== "POST") return pass();
+
+  // Suggestions while typing: no daily count, but only for signed-in people (protects the OpenAlex quota).
+  if (req.nextUrl.pathname === "/api/suggest") {
+    const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const sAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const sToken = req.cookies.get("sl_token")?.value;
+    if (!sUrl || !sAnon || !sToken) return fail("Please sign in to continue.", 401);
+    try {
+      const check = await fetch(`${sUrl}/auth/v1/user`, { headers: { apikey: sAnon, Authorization: `Bearer ${sToken}` } });
+      if (!check.ok) return fail("Please sign in to continue.", 401);
+    } catch {
+      return fail("Could not verify your sign-in right now.", 500);
+    }
+    return pass();
+  }
+
   const rule = RULES[req.nextUrl.pathname];
   if (!rule) return pass();
 
@@ -65,4 +81,4 @@ export async function middleware(req: NextRequest) {
   return pass();
 }
 
-export const config = { matcher: ["/api/outlook", "/api/search", "/api/paper-detail"] };
+export const config = { matcher: ["/api/outlook", "/api/search", "/api/paper-detail", "/api/suggest"] };
