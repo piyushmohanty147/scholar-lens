@@ -1,5 +1,6 @@
 "use client";
 
+import { safeUrl } from "../../lib/safeUrl";
 import { useEffect, useState } from "react";
 
 type Item = { point?: string; why?: string; action?: string; sources?: string[]; strength?: string };
@@ -276,9 +277,9 @@ export default function Outlook() {
           <div className="box"><h2>Reading list</h2>
             <ul>{r.readingList?.map((x, i) => {
               const s = findSource(x.source);
-              return <li key={i}>{s ? (s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a> : s.title) : x.source}{s?.year ? ` (${s.year})` : ""}: {x.reason}</li>;
+              return <li key={i}>{s ? (safeUrl(s.url) ? <a href={safeUrl(s.url) ?? "#"} target="_blank" rel="noopener noreferrer">{s.title}</a> : s.title) : x.source}{s?.year ? ` (${s.year})` : ""}: {x.reason}</li>;
             })}</ul></div>
-          <div className="box"><h2>All sources</h2><ul>{result.sources.map((s) => <li key={s.id}>[{s.id}] {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a> : s.title}{s.year ? ` (${s.year})` : ""}</li>)}</ul></div>
+          <div className="box"><h2>All sources</h2><ul>{result.sources.map((s) => <li key={s.id}>[{s.id}] {safeUrl(s.url) ? <a href={safeUrl(s.url) ?? "#"} target="_blank" rel="noopener noreferrer">{s.title}</a> : s.title}{s.year ? ` (${s.year})` : ""}</li>)}</ul></div>
           <p className="m"><em>{r.caveat} This is an informed outlook based on published research, not a guarantee or financial advice.</em></p>
           <button className="ghost noprint" onClick={() => window.print()}>Print or save as PDF</button>
         </>

@@ -1,3 +1,4 @@
+import { tooLarge } from "../../../lib/safeUrl";
 import { NextResponse } from "next/server";
 import { callGemini } from "../../../lib/gemini";
 import { allow } from "../../../lib/rateLimit";
@@ -54,6 +55,7 @@ function parseObject(text: string): Rec {
 
 export async function POST(request: Request) {
   try {
+    if (tooLarge(request, 20_000)) return NextResponse.json({ error: "That request is too large." }, { status: 413 });
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     if (!(await allow(ip, 40, "detail"))) {
       return NextResponse.json({ error: "You have reached the free limit. Please try again later." }, { status: 429 });
@@ -113,8 +115,7 @@ export async function POST(request: Request) {
       recordUsage(request, "detail"),
     ]);
     return NextResponse.json({ analysis, meta });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to analyse this paper.";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Something went wrong on our side. Please try again in a moment." }, { status: 500 });
   }
 }

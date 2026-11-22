@@ -1,5 +1,6 @@
 "use client";
 
+import { safeUrl } from "../../../lib/safeUrl";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -128,7 +129,7 @@ export default function SharedReport() {
           {box("Questions to ask experts", strs(rep.questionsForExperts).length > 0, <ul>{strs(rep.questionsForExperts).map((q, k) => <li key={k}>{q}</li>)}</ul>)}
           {box("What this evidence does not cover", strs(rep.gaps).length > 0, <ul>{strs(rep.gaps).map((q, k) => <li key={k}>{q}</li>)}</ul>)}
           {box("Glossary", arr(rep.glossary).length > 0, <ul>{arr(rep.glossary).map(obj).map((g, k) => <li key={k}><strong>{str(g.term)}:</strong> {str(g.meaning)}</li>)}</ul>)}
-          {box("Sources", sources.length > 0, <ul>{sources.map((s, k) => <li key={k}>[{str(s.id)}] {str(s.url) ? <a href={str(s.url)} target="_blank" rel="noopener noreferrer">{str(s.title)}</a> : str(s.title)}{num(s.year) ? ` (${num(s.year)})` : ""}</li>)}</ul>)}
+          {box("Sources", sources.length > 0, <ul>{sources.map((s, k) => <li key={k}>[{str(s.id)}] {safeUrl(str(s.url)) ? <a href={safeUrl(str(s.url)) ?? "#"} target="_blank" rel="noopener noreferrer">{str(s.title)}</a> : str(s.title)}{num(s.year) ? ` (${num(s.year)})` : ""}</li>)}</ul>)}
 
           <p className="m"><em>{str(rep.caveat) || "Research activity is not the same as real-world outcomes."} This is an informed outlook based on published research, not a guarantee or financial advice. Created with Scholar Lens (scholar-lens-emc5.vercel.app).</em></p>
           <button onClick={() => window.print()}>Print or save as PDF</button>

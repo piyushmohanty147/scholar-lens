@@ -1,5 +1,6 @@
 "use client";
 
+import { safeUrl } from "../../lib/safeUrl";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -65,7 +66,7 @@ function Links({ title, items }: { title: string; items: Link[] }) {
     <Section title={title}>
       <ul>{items.map((x, i) => (
         <li key={i}>
-          {x.url ? <a href={x.url} target="_blank" rel="noopener noreferrer">{x.title}</a> : x.title}
+          {safeUrl(x.url) ? <a href={safeUrl(x.url) ?? "#"} target="_blank" rel="noopener noreferrer">{x.title}</a> : x.title}
           <span className="meta"> {x.year ? `(${x.year})` : ""} {x.citations ? `· ${x.citations.toLocaleString()} citations` : ""}</span>
         </li>
       ))}</ul>
@@ -87,7 +88,7 @@ function DetailView({ d }: { d: Detail }) {
         {m.type ? <span className="badge">{m.type}</span> : null}
         {m.venue ? <span className="badge">{m.venue}</span> : null}
         {a.reliability?.level ? <span className="badge">reliability: {a.reliability.level}</span> : null}
-        {oaUrl ? <a className="oa" href={oaUrl} target="_blank" rel="noopener noreferrer">Read free full text</a> : <span className="badge">no free full text found</span>}
+        {safeUrl(oaUrl) ? <a className="oa" href={safeUrl(oaUrl) ?? "#"} target="_blank" rel="noopener noreferrer">Read free full text</a> : <span className="badge">no free full text found</span>}
       </div>
 
       {a.plainSummary ? <Section title="In plain language"><p>{a.plainSummary}</p></Section> : null}
@@ -322,7 +323,7 @@ export default function Home() {
         const st = details[p.paperId];
         return (
           <article className="card" key={p.paperId}>
-            <h3>{p.url ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</h3>
+            <h3>{safeUrl(p.url) ? <a href={safeUrl(p.url) ?? "#"} target="_blank" rel="noopener noreferrer">{p.title}</a> : p.title}</h3>
             <div className="meta">
               {p.source && <span className="badge">{p.source}</span>}
               {[p.authors.slice(0, 4).join(", "), p.year].filter(Boolean).join(" · ")} {!author && <> · Relevance {p.score}/10</>}

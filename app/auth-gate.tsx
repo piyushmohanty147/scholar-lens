@@ -12,8 +12,8 @@ import { LEGAL_UPDATED } from "../lib/site";
 type Limit = { message: string; kind: string; plan: string };
 type Rec = Record<string, unknown>;
 
-const PUBLIC_PATHS = ["/privacy", "/terms", "/cookies", "/refund", "/contact"];
-const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Cookies", "/cookies"], ["Refunds", "/refund"], ["Contact", "/contact"]];
+const PUBLIC_PATHS = ["/privacy", "/terms", "/cookies", "/refund", "/contact", "/unsubscribe", "/delete-account"];
+const LINKS: [string, string][] = [["Guides", "/guides"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Cookies", "/cookies"], ["Delete account", "/delete-account"], ["Refunds", "/refund"], ["Contact", "/contact"]];
 
 // The server keeps the sign-in token in an httpOnly cookie (set by /api/session), so scripts on the page
 // cannot read it. Resolves once the cookie is set or cleared; it never throws.
@@ -229,6 +229,10 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     if (!window.confirm("Delete your account and everything saved in it? This cannot be undone.")) return;
     const { error } = await supabase.rpc("delete_my_account");
     if (error) { window.alert("Could not delete the account right now. Please email us and we will do it for you."); return; }
+    try {
+      localStorage.removeItem("sl_outlook_history");
+      for (const key of Object.keys(localStorage)) if (key.startsWith("sl_consent_")) localStorage.removeItem(key);
+    } catch { /* storage unavailable */ }
     await supabase.auth.signOut();
     await syncCookie(null);
     setSession(null);
@@ -321,7 +325,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <input type="email" aria-label="Email address for research-trend emails" autoComplete="email" value={subEmail} onChange={(e) => setSubEmail(e.target.value)} placeholder="you@example.com" />
         <button className="btn" onClick={subscribe}>Subscribe to trend emails</button>
       </div>
-      <p className="msg">By subscribing you agree to receive research-trend emails at this address. Unsubscribe any time by emailing us. See our <Link href="/privacy">Privacy Policy</Link>.</p>
+      <p className="msg">By subscribing you agree to receive research-trend emails at this address. Unsubscribe any time on the <Link href="/unsubscribe">Unsubscribe page</Link>. See our <Link href="/privacy">Privacy Policy</Link>.</p>
       {subMsg ? <p className="msg">{subMsg}</p> : null}
     </>
   );
